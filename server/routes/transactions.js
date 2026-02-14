@@ -279,4 +279,32 @@ router.post("/bulk-delete", (req, res) => {
 });
 
 
+/* REPORT (transaction + seller/buyer client details) */
+router.get("/:id/report", (req, res) => {
+  const id = Number(req.params.id);
+
+  const tx = db
+    .prepare(`SELECT * FROM transactions WHERE id = ? AND is_active = 1`)
+    .get(id);
+
+  if (!tx) return res.status(404).json({ message: "Transaction not found" });
+
+  // NOTE: transactions.seller and buyer are TEXT names.
+  // We fetch matching clients by name (same as dropdown value).
+  const sellerClient = db
+    .prepare(`SELECT * FROM clients WHERE is_active = 1 AND name = ? LIMIT 1`)
+    .get(tx.seller);
+
+  const buyerClient = db
+    .prepare(`SELECT * FROM clients WHERE is_active = 1 AND name = ? LIMIT 1`)
+    .get(tx.buyer);
+
+  res.json({
+    transaction: tx,
+    seller: sellerClient || null,
+    buyer: buyerClient || null,
+  });
+});
+
+
 module.exports = router;

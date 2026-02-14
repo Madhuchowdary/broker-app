@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { TxContext } from "./TransactionsShell";
 import type { Transaction } from "./TransactionsShell";
 
+type FormState = Omit<Transaction, "status"> & {
+  status: "DELIVERED" | "UNDELIVERED";
+};
 
-type FormState = Omit<Transaction, "status"> & { status: "DELIVERED" | "UNDELIVERED" };
 const TX_API = "/api/transactions";
-
-
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -54,8 +54,6 @@ function addDays(d: Date, days: number) {
   return x;
 }
 
-
-
 export default function TransactionsEntry() {
   const nav = useNavigate();
   const store = useContext(TxContext);
@@ -70,27 +68,27 @@ export default function TransactionsEntry() {
     [rows, selectedId]
   );
 
-    const [searchQ, setSearchQ] = useState("");
-    const [gridRows, setGridRows] = useState<any[]>([]); // results list
-    const [gridLoaded, setGridLoaded] = useState(false); // to keep empty until search
-    const [gridLoading, setGridLoading] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [gridRows, setGridRows] = useState<any[]>([]); // results list
+  const [gridLoaded, setGridLoaded] = useState(false); // to keep empty until search
+  const [gridLoading, setGridLoading] = useState(false);
 
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-    function toggleSelect(id: number, checked: boolean) {
+  function toggleSelect(id: number, checked: boolean) {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
-    }
+  }
 
-    function toggleSelectAll(checked: boolean) {
+  function toggleSelectAll(checked: boolean) {
     if (!checked) return setSelectedIds([]);
     setSelectedIds(gridRows.map((r) => Number(r.id)).filter((n) => n > 0));
-    }
+  }
 
   const [form, setForm] = useState<FormState>(() => ({
     id: selected?.id ?? 0,
-    transaction_id: "",   
+    transaction_id: "",
     seller: "",
-    sellerBrokerage: "",   
+    sellerBrokerage: "",
     buyer: "",
     buyerBrokerage: "",
     product: "",
@@ -99,7 +97,7 @@ export default function TransactionsEntry() {
     tax: "Plus VAT",
     quantity: "",
     unitQty: "",
-  
+
     deliveryTime: "",
     confirmDate: toDDMMYY(new Date()),
     deliveryDate: toDDMMYY(addDays(new Date(), 7)),
@@ -108,7 +106,7 @@ export default function TransactionsEntry() {
     payment: "",
     flag: "",
     status: "UNDELIVERED",
-  
+
     tankerNo: "",
     billNo: "",
     deliveryQty: "0",
@@ -122,13 +120,12 @@ export default function TransactionsEntry() {
 
   function addNew() {
     setSelectedId(null);
-    setShowDeliveryPanel(false); // ✅ daily entry mode
+    setShowDeliveryPanel(false);
     setDeliveryDateTouched(false);
 
-    setForm((p) => ({
-      ...p,
+    setForm(() => ({
       id: 0,
-      transaction_id: "", 
+      transaction_id: "",
       seller: "",
       sellerBrokerage: "",
       buyer: "",
@@ -139,14 +136,15 @@ export default function TransactionsEntry() {
       tax: "Plus VAT",
       quantity: "",
       unitQty: "",
-      
+
       deliveryTime: "",
+      confirmDate: toDDMMYY(new Date()),
+      deliveryDate: toDDMMYY(addDays(new Date(), 7)),
+
       deliveryPlace: "",
       payment: "",
       flag: "",
       status: "UNDELIVERED",
-      confirmDate: toDDMMYY(new Date()),
-      deliveryDate: toDDMMYY(addDays(new Date(), 7)),
 
       tankerNo: "",
       billNo: "",
@@ -156,164 +154,171 @@ export default function TransactionsEntry() {
     }));
   }
 
-    async function save() {
-    // create if id=0 else update
+  async function save() {
     const isNew = !selectedId || form.id === 0;
-
     const url = isNew ? TX_API : `${TX_API}/${selectedId}`;
     const method = isNew ? "POST" : "PUT";
 
     const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
     });
 
     if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err?.message || "Save failed");
-        return;
+      const err = await res.json().catch(() => ({}));
+      alert(err?.message || "Save failed");
+      return;
     }
 
     const saved = await res.json();
 
-    // keep your context store in sync
     setRows((prev) => {
-        const exists = prev.some((x) => x.id === saved.id);
-        return exists ? prev.map((x) => (x.id === saved.id ? saved : x)) : [saved, ...prev];
+      const exists = prev.some((x) => x.id === saved.id);
+      return exists ? prev.map((x) => (x.id === saved.id ? saved : x)) : [saved, ...prev];
     });
 
     setSelectedId(saved.id);
-    }
 
-    async function update() {
+    // keep tx id visible even if FormState type doesn't include it
+    setForm((p) => ({ ...p, ...(saved || {}) }));
+  }
+
+  async function update() {
     if (!selectedId) return;
     await save();
-    }
-
-
-    async function remove() {
-        if (!selectedId) return;
-        if (!confirm("Remove this transaction?")) return;
-
-        const res = await fetch(`${TX_API}/${selectedId}`, { method: "DELETE" });
-        if (!res.ok) {
-            alert("Remove failed");
-            return;
-        }
-
-        setRows((prev) => prev.filter((x) => x.id !== selectedId));
-        setSelectedId(null);
-        setShowDeliveryPanel(false);
-    }
-
-
-    async function fetchTransactions(params: { q?: string; status?: string }) {
-  const qs = new URLSearchParams();
-  if (params.q) qs.set("q", params.q);
-  if (params.status) qs.set("status", params.status);
-
-  setGridLoading(true);
-  try {
-    const res = await fetch(`/api/transactions?${qs.toString()}`);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    setGridRows(Array.isArray(data) ? data : []);
-    setGridLoaded(true);
-    setSelectedIds([]);
-  } finally {
-    setGridLoading(false);
   }
-}
 
-    async function onFindClick() {
-    const q = searchQ.trim();
-    if (!q) {
-        // per your requirement: don't load grid unless search
-        setGridRows([]);
-        setGridLoaded(false);
-        return;
-    }
-    await fetchTransactions({ q });
+  async function remove() {
+    if (!selectedId) return;
+    if (!confirm("Remove this transaction?")) return;
+
+    const res = await fetch(`${TX_API}/${selectedId}`, { method: "DELETE" });
+    if (!res.ok) {
+      alert("Remove failed");
+      return;
     }
 
-    async function onShowUndelivered() {
-    await fetchTransactions({ status: "UNDELIVERED", q: searchQ.trim() || undefined });
+    setRows((prev) => prev.filter((x) => x.id !== selectedId));
+    setSelectedId(null);
+    setShowDeliveryPanel(false);
+  }
+
+  async function searchGrid(opts?: { status?: "UNDELIVERED" | "DELIVERED" | "" }) {
+    const q = (searchQ || "").trim();
+    const status = (opts?.status ?? "").trim();
+
+    if (!q && !status) {
+      setGridRows([]);
+      setGridLoaded(true);
+      return;
     }
 
+    setGridLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (status) params.set("status", status);
 
-    function loadRowToForm(r: any) {
-  setSelectedId(Number(r.id));
-  setShowDeliveryPanel(r.status === "UNDELIVERED"); // you can adjust
-  setForm((p) => ({ ...p, ...r }));
-}
-
-    async function deleteOne(id: number) {
-    if (!confirm("Delete this transaction?")) return;
-    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    if (!res.ok) return alert("Delete failed");
-
-    setGridRows((prev) => prev.filter((x) => Number(x.id) !== id));
-    setSelectedIds((prev) => prev.filter((x) => x !== id));
-    if (selectedId === id) {
-        setSelectedId(null);
-        setShowDeliveryPanel(false);
+      const res = await fetch(`${TX_API}?${params.toString()}`);
+      const data = await res.json();
+      setGridRows(Array.isArray(data) ? data : []);
+      setGridLoaded(true);
+      setSelectedIds([]);
+    } finally {
+      setGridLoading(false);
     }
-    }
+  }
 
-    async function bulkDelete() {
+  async function bulkDeleteSelected() {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Delete selected (${selectedIds.length})?`)) return;
+    if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
 
-    const res = await fetch(`/api/transactions/bulk-delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds }),
-    });
-
-    if (!res.ok) return alert("Bulk delete failed");
+    // If you don't have bulk-delete endpoint, delete one by one safely
+    for (const id of selectedIds) {
+      await fetch(`${TX_API}/${id}`, { method: "DELETE" });
+    }
 
     setGridRows((prev) => prev.filter((r) => !selectedIds.includes(Number(r.id))));
     setSelectedIds([]);
-    }
+  }
 
-    // function openFind() {
-    //     nav("/transactions/find");
-    // }
+  type Opt = { id: number; name: string };
 
-    type Opt = { id: number; name: string };
+  const [unitRateOpts, setUnitRateOpts] = useState<Opt[]>([]);
+  const [unitQtyOpts, setUnitQtyOpts] = useState<Opt[]>([]);
+  const [deliveryPlaceOpts, setDeliveryPlaceOpts] = useState<Opt[]>([]);
+  const [paymentOpts, setPaymentOpts] = useState<Opt[]>([]);
+  const [flagOpts, setFlagOpts] = useState<Opt[]>([]);
 
-    const [unitRateOpts, setUnitRateOpts] = useState<Opt[]>([]);
-    const [unitQtyOpts, setUnitQtyOpts] = useState<Opt[]>([]);
-    const [deliveryPlaceOpts, setDeliveryPlaceOpts] = useState<Opt[]>([]);
-    const [paymentOpts, setPaymentOpts] = useState<Opt[]>([]);
-    const [flagOpts, setFlagOpts] = useState<Opt[]>([]);
+  type ClientOpt = { id: number; name: string; mobile?: string };
+  const [clientOpts, setClientOpts] = useState<ClientOpt[]>([]);
+  const [productOpts, setProductOpts] = useState<Opt[]>([]);
 
-    async function fetchOpts(url: string): Promise<Opt[]> {
+  async function fetchOpts(url: string): Promise<Opt[]> {
     const res = await fetch(url);
     const data = await res.json();
     if (!Array.isArray(data)) return [];
-    // normalize: some APIs might return {name} or {label}
     return data
-        .map((x: any) => ({
+      .map((x: any) => ({
         id: Number(x.id),
         name: (x.name ?? x.label ?? "").toString(),
-        }))
-        .filter((x) => x.id > 0 && x.name.trim().length > 0);
-    }
+      }))
+      .filter((x) => x.id > 0 && x.name.trim().length > 0);
+  }
 
-// Load dropdown data once
-    React.useEffect(() => {
+  async function fetchClients(): Promise<ClientOpt[]> {
+    const res = await fetch("/api/clients");
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((x: any) => ({
+        id: Number(x.id),
+        name: (x.name ?? "").toString(),
+        mobile: (x.mobile ?? "").toString(),
+      }))
+      .filter((x) => x.id > 0 && x.name.trim().length > 0);
+  }
+
+  async function fetchProducts(): Promise<Opt[]> {
+    // Prefer real items API if present, else fallback to item-types
+    const tryUrls = ["/api/items", "/api/item-types"];
+    for (const u of tryUrls) {
+      try {
+        const res = await fetch(u);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!Array.isArray(data)) continue;
+
+        const out = data
+          .map((x: any) => ({
+            id: Number(x.id),
+            name: (x.name ?? x.item_name ?? x.label ?? "").toString(),
+          }))
+          .filter((x: any) => x.id > 0 && x.name.trim().length > 0);
+
+        if (out.length) return out;
+      } catch {
+        // ignore and try next url
+      }
+    }
+    return [];
+  }
+
+  // Load dropdown data once
+  React.useEffect(() => {
     let alive = true;
 
     (async () => {
-        try {
-        const [ur, uq, dp, pay, flg] = await Promise.all([
-            fetchOpts("http://localhost:4000/api/rate-per-unit"),
-            fetchOpts("http://localhost:4000/api/qty-types"),
-            fetchOpts("http://localhost:4000/api/delivery-places"),
-            fetchOpts("http://localhost:4000/api/payment-types"),
-            fetchOpts("http://localhost:4000/api/flags"),
+      try {
+        const [ur, uq, dp, pay, flg, clients, products] = await Promise.all([
+          fetchOpts("/api/rate-per-unit"),
+          fetchOpts("/api/qty-types"),
+          fetchOpts("/api/delivery-places"),
+          fetchOpts("/api/payment-types"),
+          fetchOpts("/api/flags"),
+          fetchClients(),
+          fetchProducts(),
         ]);
 
         if (!alive) return;
@@ -322,53 +327,102 @@ export default function TransactionsEntry() {
         setDeliveryPlaceOpts(dp);
         setPaymentOpts(pay);
         setFlagOpts(flg);
-        } catch (e) {
+        setClientOpts(clients);
+        setProductOpts(products);
+      } catch (e) {
         console.error(e);
         alert("Failed to load master dropdowns. Check server is running.");
-        }
+      }
     })();
 
     return () => {
-        alive = false;
+      alive = false;
     };
-    }, []);
+  }, []);
 
-
-
-    // if user selects something from Find, we load that record into form
-    React.useEffect(() => {
-        if (!selected) return;
-        setForm((p) => ({ ...p, ...selected }));
-        setDeliveryDateTouched(true); // loaded record has its own deliveryDate
-    }, [selected]);
-
+  // if user selects something from Find, we load that record into form
+  React.useEffect(() => {
+    if (!selected) return;
+    setForm((p) => ({ ...p, ...selected } as any));
+    setDeliveryDateTouched(true); // loaded record has its own deliveryDate
+  }, [selected]);
 
   return (
     <div style={wrap}>
+      {/* Searchable dropdown sources */}
+      <datalist id="clientsList">
+        {clientOpts.map((c) => (
+          <option key={c.id} value={c.name}>
+            {c.mobile ? `(${c.mobile})` : ""}
+          </option>
+        ))}
+      </datalist>
+
+      <datalist id="productsList">
+        {productOpts.map((p) => (
+          <option key={p.id} value={p.name} />
+        ))}
+      </datalist>
+
+      <datalist id="unitRateList">
+        {unitRateOpts.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+
+      <datalist id="unitQtyList">
+        {unitQtyOpts.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+
+      <datalist id="deliveryPlaceList">
+        {deliveryPlaceOpts.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+
+      <datalist id="paymentList">
+        {paymentOpts.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+
+      <datalist id="flagList">
+        {flagOpts.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+
       <div style={mainArea}>
-        {/* Left + Middle content (white-ish) */}
+        {/* Left + Middle content */}
         <div style={contentArea}>
           {/* Top two columns: Seller / Buyer */}
           <div style={twoCol}>
-            <Section
-                title="Seller"
-                titleColor="#ffd400"
-                sectionStyle={section}
-                titleBarStyle={titleBar}
-                >
-
-             <Row label="Seller" rowStyle={row} lblStyle={lbl}>
-
-                <input style={input} value={form.seller} onChange={(e) => set("seller", e.target.value)} />
+            <Section title="Seller" titleColor="#ffd400" sectionStyle={section} titleBarStyle={titleBar}>
+              <Row label="Seller" rowStyle={row} lblStyle={lbl}>
+                <input
+                  style={input}
+                  list="clientsList"
+                  value={form.seller}
+                  onChange={(e) => set("seller", e.target.value)}
+                  placeholder="Type to search..."
+                />
               </Row>
               <Row label="Brokerage" rowStyle={row} lblStyle={lbl}>
                 <input style={input} value={form.sellerBrokerage} onChange={(e) => set("sellerBrokerage", e.target.value)} />
               </Row>
             </Section>
 
-            <Section title="Buyer" titleColor="#1ee6ff" sectionStyle={section}  titleBarStyle={titleBar}>
+            <Section title="Buyer" titleColor="#1ee6ff" sectionStyle={section} titleBarStyle={titleBar}>
               <Row label="Buyer" rowStyle={row} lblStyle={lbl}>
-                <input style={input} value={form.buyer} onChange={(e) => set("buyer", e.target.value)} />
+                <input
+                  style={input}
+                  list="clientsList"
+                  value={form.buyer}
+                  onChange={(e) => set("buyer", e.target.value)}
+                  placeholder="Type to search..."
+                />
               </Row>
               <Row label="Brokerage" rowStyle={row} lblStyle={lbl}>
                 <input style={input} value={form.buyerBrokerage} onChange={(e) => set("buyerBrokerage", e.target.value)} />
@@ -376,32 +430,32 @@ export default function TransactionsEntry() {
             </Section>
           </div>
 
-
-
-
           {/* Mid two columns: Product Details / Transaction Details */}
           <div style={twoCol}>
-            <Section title="Product Details" titleColor="#ffffff"  sectionStyle={section}  titleBarStyle={titleBar}>
+            <Section title="Product Details" titleColor="#ffffff" sectionStyle={section} titleBarStyle={titleBar}>
               <Row label="Product" rowStyle={row} lblStyle={lbl}>
-                <input style={input} value={form.product} onChange={(e) => set("product", e.target.value)} />
+                <input
+                  style={input}
+                  list="productsList"
+                  value={form.product}
+                  onChange={(e) => set("product", e.target.value)}
+                  placeholder="Type to search..."
+                />
               </Row>
+
               <Row label="Rate" rowStyle={row} lblStyle={lbl}>
                 <input style={input} value={form.rate} onChange={(e) => set("rate", e.target.value)} />
               </Row>
+
               <Row label="Unit (Rate)" rowStyle={row} lblStyle={lbl}>
-                <select
-                    style={select}
-                    value={form.unitRate}
-                    onChange={(e) => set("unitRate", e.target.value)}
-                >
-                    <option value="">Select unit (rate)</option>
-                    {unitRateOpts.map((o) => (
-                    <option key={o.id} value={o.name}>
-                        {o.name}
-                    </option>
-                    ))}
-                </select>
-                </Row>
+                <input
+                  style={selectSearch}
+                  list="unitRateList"
+                  value={form.unitRate}
+                  onChange={(e) => set("unitRate", e.target.value)}
+                  placeholder="Type to search unit (rate)..."
+                />
+              </Row>
 
               <Row label="Tax" rowStyle={row} lblStyle={lbl}>
                 <select style={select} value={form.tax} onChange={(e) => set("tax", e.target.value)}>
@@ -410,126 +464,109 @@ export default function TransactionsEntry() {
                   <option>VAT Exempt</option>
                 </select>
               </Row>
+
               <Row label="Quantity" rowStyle={row} lblStyle={lbl}>
                 <input style={input} value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />
               </Row>
-             <Row label="Unit (Qty)" rowStyle={row} lblStyle={lbl}>
-                <select
-                    style={select}
-                    value={form.unitQty}
-                    onChange={(e) => set("unitQty", e.target.value)}
-                >
-                    <option value="">Select unit (qty)</option>
-                    {unitQtyOpts.map((o) => (
-                    <option key={o.id} value={o.name}>
-                        {o.name}
-                    </option>
-                    ))}
-                </select>
-                </Row>
 
+              <Row label="Unit (Qty)" rowStyle={row} lblStyle={lbl}>
+                <input
+                  style={selectSearch}
+                  list="unitQtyList"
+                  value={form.unitQty}
+                  onChange={(e) => set("unitQty", e.target.value)}
+                  placeholder="Type to search unit (qty)..."
+                />
+              </Row>
 
-            <div style={bottomNo}> NO : {form.id ? form.id : ""}</div>
-                <div style={{ fontSize: 12, textAlign: "center", marginTop: 6 }}>
+              <div style={{ fontSize: 12, textAlign: "center", marginTop: 10 }}>
+                  S NO: {(form as any).id || "-"}
+              </div>  
+
+              <div style={{ fontSize: 12, textAlign: "center", marginTop: 10 }}>
                 Tx ID: {(form as any).transaction_id || "-"}
-            </div>
-
+              </div>
             </Section>
 
-            <Section title="Transaction Details" titleColor="#ff7a18"  sectionStyle={section}  titleBarStyle={titleBar}>
+            <Section title="Transaction Details" titleColor="#ff7a18" sectionStyle={section} titleBarStyle={titleBar}>
               <Row label="Confirm Date" rowStyle={row} lblStyle={lbl}>
                 <div style={dateBox}>
-                    {/* display dd-mm-yy */}
-                    <input style={dateInput} value={form.confirmDate} readOnly />
+                  <input style={dateInput} value={form.confirmDate} readOnly />
 
-                    {/* real picker */}
-                    <input
+                  <input
                     type="date"
                     style={datePickerHidden}
                     value={toISODate(fromDDMMYY(form.confirmDate) || new Date())}
                     onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        set("confirmDate", toDDMMYY(d));
+                      const d = fromISODate(e.target.value);
+                      set("confirmDate", toDDMMYY(d));
 
-                        if (!deliveryDateTouched) {
+                      if (!deliveryDateTouched) {
                         set("deliveryDate", toDDMMYY(addDays(d, 7)));
-                        }
+                      }
                     }}
-                    />
+                  />
 
-                    <div style={calBtn}>📅</div>
+                  <div style={calBtn}>📅</div>
                 </div>
-                            </Row>
+              </Row>
 
-            <Row label="Delivery Date" rowStyle={row} lblStyle={lbl}>
+              <Row label="Delivery Date" rowStyle={row} lblStyle={lbl}>
                 <div style={dateBox}>
-                    <input style={dateInput} value={form.deliveryDate ?? ""} readOnly />
+                  <input style={dateInput} value={form.deliveryDate ?? ""} readOnly />
 
-                    <input
+                  <input
                     type="date"
                     style={datePickerHidden}
                     value={toISODate(
-                        fromDDMMYY(form.deliveryDate || "") ||
-                        addDays(fromDDMMYY(form.confirmDate) || new Date(), 7)
+                      fromDDMMYY(form.deliveryDate || "") || addDays(fromDDMMYY(form.confirmDate) || new Date(), 7)
                     )}
                     onChange={(e) => {
-                        const d = fromISODate(e.target.value);
-                        setDeliveryDateTouched(true);
-                        set("deliveryDate", toDDMMYY(d));
+                      const d = fromISODate(e.target.value);
+                      setDeliveryDateTouched(true);
+                      set("deliveryDate", toDDMMYY(d));
                     }}
-                    />
+                  />
 
-                    <div style={calBtn}>📅</div>
+                  <div style={calBtn}>📅</div>
                 </div>
-            </Row>
+              </Row>
 
-             <Row label="Delivery Place" rowStyle={row} lblStyle={lbl}>
-                <select
-                    style={select}
-                    value={form.deliveryPlace}
-                    onChange={(e) => set("deliveryPlace", e.target.value)}
-                >
-                    <option value="">Select delivery place</option>
-                    {deliveryPlaceOpts.map((o) => (
-                    <option key={o.id} value={o.name}>
-                        {o.name}
-                    </option>
-                    ))}
-                </select>
-            </Row>
+              <Row label="Delivery Time" rowStyle={row} lblStyle={lbl}>
+                <input style={input} value={form.deliveryTime} onChange={(e) => set("deliveryTime", e.target.value)} />
+              </Row>
 
-            <Row label="Payment" rowStyle={row} lblStyle={lbl}>
-                <select
-                    style={select}
-                    value={form.payment}
-                    onChange={(e) => set("payment", e.target.value)}
-                >
-                    <option value="">Select payment</option>
-                    {paymentOpts.map((o) => (
-                    <option key={o.id} value={o.name}>
-                        {o.name}
-                    </option>
-                    ))}
-                </select>
-            </Row>
+              <Row label="Delivery Place" rowStyle={row} lblStyle={lbl}>
+                <input
+                  style={selectSearch}
+                  list="deliveryPlaceList"
+                  value={form.deliveryPlace}
+                  onChange={(e) => set("deliveryPlace", e.target.value)}
+                  placeholder="Type to search delivery place..."
+                />
+              </Row>
 
-             <Row label="Flag" rowStyle={row} lblStyle={lbl}>
-                <select
-                    style={select}
-                    value={form.flag}
-                    onChange={(e) => set("flag", e.target.value)}
-                >
-                    <option value="">Select flag</option>
-                    {flagOpts.map((o) => (
-                    <option key={o.id} value={o.name}>
-                        {o.name}
-                    </option>
-                    ))}
-                </select>
-            </Row>
+              <Row label="Payment" rowStyle={row} lblStyle={lbl}>
+                <input
+                  style={selectSearch}
+                  list="paymentList"
+                  value={form.payment}
+                  onChange={(e) => set("payment", e.target.value)}
+                  placeholder="Type to search payment..."
+                />
+              </Row>
 
+              <Row label="Flag" rowStyle={row} lblStyle={lbl}>
+                <input
+                  style={selectSearch}
+                  list="flagList"
+                  value={form.flag}
+                  onChange={(e) => set("flag", e.target.value)}
+                  placeholder="Type to search flag..."
+                />
+              </Row>
 
-              {/* ✅ Delivery Details appears only when loaded from Find and undelivered */}
+              {/* Delivery Details only when needed */}
               {showDeliveryPanel && (
                 <div style={{ marginTop: 18 }}>
                   <div style={subTitleBar}>
@@ -537,25 +574,6 @@ export default function TransactionsEntry() {
                   </div>
 
                   <div style={{ padding: 12 }}>
-                    <Row label="Delivery Date" rowStyle={row} lblStyle={lbl}>
-                        <div style={dateBox}>
-                            <input style={dateInput} value={form.deliveryDate ?? ""} readOnly />
-
-                            <input
-                            type="date"
-                            style={datePickerHidden}
-                            value={toISODate(fromDDMMYY(form.deliveryDate || "") || addDays(fromDDMMYY(form.confirmDate) || new Date(), 7))}
-                            onChange={(e) => {
-                                const d = fromISODate(e.target.value);
-                                setDeliveryDateTouched(true);
-                                set("deliveryDate", toDDMMYY(d));
-                            }}
-                            />
-
-                            <div style={calBtn}>📅</div>
-                        </div>
-                    </Row>
-
                     <Row label="Tanker No" rowStyle={row} lblStyle={lbl}>
                       <input style={input} value={form.tankerNo ?? ""} onChange={(e) => set("tankerNo", e.target.value)} />
                     </Row>
@@ -566,7 +584,11 @@ export default function TransactionsEntry() {
                       <input style={input} value={form.deliveryQty ?? ""} onChange={(e) => set("deliveryQty", e.target.value)} />
                     </Row>
                     <Row label="Unit (Qty)" rowStyle={row} lblStyle={lbl}>
-                      <input style={input} value={form.deliveryUnitQty ?? ""} onChange={(e) => set("deliveryUnitQty", e.target.value)} />
+                      <input
+                        style={input}
+                        value={form.deliveryUnitQty ?? ""}
+                        onChange={(e) => set("deliveryUnitQty", e.target.value)}
+                      />
                     </Row>
                     <Row label="Amount Rs." rowStyle={row} lblStyle={lbl}>
                       <input style={input} value={form.amountRs ?? ""} onChange={(e) => set("amountRs", e.target.value)} />
@@ -577,132 +599,164 @@ export default function TransactionsEntry() {
             </Section>
           </div>
 
+          {/* SEARCH GRID (same screen) */}
+          <div style={{ padding: 10, borderTop: "1px solid #8c95a3", background: "#f7f7f7" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 800, color: "#1f2a3a" }}>Find Transactions</div>
 
-
-                    {/* ---- Search + Grid (loads only after Find / Show Undelivered) ---- */}
-            <div style={{ padding: 12 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                style={{
-                    flex: 1,
-                    height: 34,
-                    border: "1px solid #d0d7e2",
-                    borderRadius: 10,
-                    padding: "0 12px",
-                    fontSize: 13,
-                }}
-                placeholder="Find (seller/buyer/product/payment/flag/bill/tanker)..."
+              <input
+                style={{ ...searchInput, width: 360 }}
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") onFindClick();
-                }}
-                />
+                placeholder="Search seller / buyer / product / tanker / bill etc..."
+                onKeyDown={(e) => (e.key === "Enter" ? searchGrid() : null)}
+              />
 
-                <button style={pillBtn} onClick={onFindClick}>Find</button>
-                <button style={pillBtn} onClick={onShowUndelivered}>Show Undelivered</button>
+              <button style={btnTop} onClick={() => searchGrid()}>
+                Search
+              </button>
 
-                <button
+              <button style={btnTop} onClick={() => searchGrid({ status: "UNDELIVERED" })}>
+                Show Undelivered
+              </button>
+
+              <button
                 style={{
-                    ...pillBtn,
-                    background: selectedIds.length ? "#ffecec" : "#f5f7fb",
-                    borderColor: selectedIds.length ? "#ffb4b4" : "#d0d7e2",
-                    color: selectedIds.length ? "#b42318" : "#111827",
+                  ...btnTopDanger,
+                  opacity: selectedIds.length ? 1 : 0.5,
+                  cursor: selectedIds.length ? "pointer" : "not-allowed",
                 }}
-                onClick={bulkDelete}
-                disabled={selectedIds.length === 0}
-                >
-                Delete Selected ({selectedIds.length})
-                </button>
+                disabled={!selectedIds.length}
+                onClick={bulkDeleteSelected}
+              >
+                Bulk Delete ({selectedIds.length})
+              </button>
 
-                {gridLoading && <div style={{ fontSize: 12, color: "#6b7280" }}>Loading...</div>}
+              <div style={{ marginLeft: "auto", fontSize: 12, color: "#475569" }}>
+                {gridLoading ? "Loading..." : gridLoaded ? `${gridRows.length} record(s)` : "Enter search and click Search"}
+              </div>
             </div>
 
-            {gridLoaded && (
-                <div style={{ marginTop: 12, background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb", overflow: "hidden" }}>
-                <div style={{ padding: 12, fontWeight: 800 }}>Transactions</div>
+            <div style={tableWrap}>
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={th}>
+                      <input
+                        type="checkbox"
+                        checked={gridRows.length > 0 && selectedIds.length === gridRows.length}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                      />
+                    </th>
+                    <th style={th}>ID</th>
+                    <th style={th}>Tx ID</th>
+                    <th style={th}>Seller</th>
+                    <th style={th}>Buyer</th>
+                    <th style={th}>Product</th>
+                    <th style={th}>Rate</th>
+                    <th style={th}>UnitRate</th>
+                    <th style={th}>Qty</th>
+                    <th style={th}>UnitQty</th>
+                    <th style={th}>Confirm</th>
+                    <th style={th}>Delivery</th>
+                    <th style={th}>Place</th>
+                    <th style={th}>Payment</th>
+                    <th style={th}>Flag</th>
+                    <th style={th}>Status</th>
+                    <th style={th}>Actions</th>
+                  </tr>
+                </thead>
 
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                    <tr style={{ background: "#f7fafc", borderTop: "1px solid #eef2f7", borderBottom: "1px solid #eef2f7" }}>
-                        <th style={th}><input type="checkbox" checked={selectedIds.length > 0 && selectedIds.length === gridRows.length} onChange={(e)=>toggleSelectAll(e.target.checked)} /></th>
-                        <th style={th}>ID</th>
-                        <th style={th}>Tx ID</th>
-                        <th style={th}>Seller</th>
-                        <th style={th}>Buyer</th>
-                        <th style={th}>Confirm</th>
-                        <th style={th}>Delivery</th>
-                        <th style={th}>Place</th>
-                        <th style={th}>Payment</th>
-                        <th style={th}>Flag</th>
-                        <th style={th}>Status</th>
-                        <th style={th}>Actions</th>
+                <tbody>
+                  {!gridLoaded ? (
+                    <tr>
+                      <td style={emptyTd} colSpan={17}>
+                        Type search and click Search.
+                      </td>
                     </tr>
-                    </thead>
-
-                    <tbody>
-                    {gridRows.map((r) => {
-                        const id = Number(r.id);
-                        const checked = selectedIds.includes(id);
-
-                        return (
-                        <tr key={id} style={{ borderBottom: "1px solid #eef2f7" }}>
-                            <td style={td}>
-                            <input type="checkbox" checked={checked} onChange={(e) => toggleSelect(id, e.target.checked)} />
-                            </td>
-
-                            <td style={td}>{id}</td>
-                            <td style={td}>{r.transaction_id || "-"}</td>
-
-                            {/* per your note: seller/buyer not editable in grid -> just display */}
-                            <td style={td}>{r.seller || "-"}</td>
-                            <td style={td}>{r.buyer || "-"}</td>
-
-                            {/* confirmDate not editable in grid -> just display */}
-                            <td style={td}>{r.confirmDate || r.confirm_date || "-"}</td>
-
-                            <td style={td}>{r.deliveryDate || r.delivery_date || "-"}</td>
-                            <td style={td}>{r.deliveryPlace || r.delivery_place || "-"}</td>
-                            <td style={td}>{r.payment || "-"}</td>
-                            <td style={td}>{r.flag || "-"}</td>
-                            <td style={td}>{r.status || "-"}</td>
-
-                            <td style={td}>
-                            <button style={miniBtn} onClick={() => loadRowToForm(r)}>Modify</button>
-                            <button style={{ ...miniBtn, marginLeft: 8, background: "#ffecec", borderColor: "#ffb4b4", color: "#b42318" }} onClick={() => deleteOne(id)}>
-                                Delete
-                            </button>
-                            </td>
-                        </tr>
-                        );
-                    })}
-                    </tbody>
-                </table>
-                </div>
-            )}
+                  ) : gridRows.length === 0 ? (
+                    <tr>
+                      <td style={emptyTd} colSpan={17}>
+                        No results.
+                      </td>
+                    </tr>
+                  ) : (
+                    gridRows.map((r) => (
+                      <tr key={r.id} style={{ background: selectedId === r.id ? "#eef2ff" : "white" }}>
+                        <td style={td}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(Number(r.id))}
+                            onChange={(e) => toggleSelect(Number(r.id), e.target.checked)}
+                          />
+                        </td>
+                        <td style={td}>{r.id}</td>
+                        <td style={td}>{r.transaction_id || "-"}</td>
+                        <td style={td}>{r.seller || ""}</td>
+                        <td style={td}>{r.buyer || ""}</td>
+                        <td style={td}>{r.product || ""}</td>
+                        <td style={td}>{r.rate || ""}</td>
+                        <td style={td}>{r.unit_rate || r.unitRate || ""}</td>
+                        <td style={td}>{r.quantity || ""}</td>
+                        <td style={td}>{r.unit_qty || r.unitQty || ""}</td>
+                        <td style={td}>{r.confirm_date || r.confirmDate || ""}</td>
+                        <td style={td}>{r.delivery_date || r.deliveryDate || ""}</td>
+                        <td style={td}>{r.delivery_place || r.deliveryPlace || ""}</td>
+                        <td style={td}>{r.payment || ""}</td>
+                        <td style={td}>{r.flag || ""}</td>
+                        <td style={td}>{r.status || ""}</td>
+                        <td style={td}>
+                          <button
+                            style={miniBtn}
+                            onClick={() => {
+                              setSelectedId(Number(r.id));
+                              setShowDeliveryPanel((r.status || "") === "UNDELIVERED");
+                              setForm((p) => ({ ...p, ...(r as any) }));
+                            }}
+                          >
+                            Modify
+                          </button>
+                          <button
+                            style={miniBtnDanger}
+                            onClick={async () => {
+                              if (!confirm("Delete this transaction?")) return;
+                              await fetch(`${TX_API}/${r.id}`, { method: "DELETE" });
+                              setGridRows((prev) => prev.filter((x) => Number(x.id) !== Number(r.id)));
+                              setSelectedIds((prev) => prev.filter((x) => x !== Number(r.id)));
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
+          </div>
         </div>
 
-        {/* Right button column (light cyan panel) */}
+        {/* Right button column */}
         <div style={rightPanel}>
           <ActionBtn label="Add New" onClick={addNew} btnStyle={btn} />
-
           <ActionBtn label="Save" onClick={save} btnStyle={btn} />
-         
-          {/* <ActionBtn
-           btnStyle={btn} 
-            label="Find"
+          <ActionBtn label="Update" onClick={update} btnStyle={btn} />
+         <ActionBtn
+            label="View Report"
             onClick={() => {
-              // ✅ user will search undelivered here
-              openFind();
+                const tid = selectedId || form.id;
+                if (!tid) return alert("Please save/select a transaction first");
+                nav(`/transactions/report/${tid}`);
             }}
-          /> */}
-          <ActionBtn label="View Report" onClick={() => alert("Report - next")} btnStyle={btn} />
+            btnStyle={btn}
+         />
+
+
         </div>
       </div>
     </div>
   );
-
 }
 
 /* --- styles tuned to match screenshot structure --- */
@@ -720,11 +774,12 @@ const mainArea: React.CSSProperties = {
 const contentArea: React.CSSProperties = {
   flex: 1,
   padding: 0,
+  width: '79%'
 };
 
 const rightPanel: React.CSSProperties = {
-  width: 190,
-  background: "#bfe7ef", // ✅ light cyan like screenshot
+  width: '20%',
+  background: "#bfe7ef",
   borderLeft: "1px solid #8c95a3",
   padding: 10,
   display: "flex",
@@ -757,7 +812,7 @@ const section: React.CSSProperties = {
 
 const titleBar: React.CSSProperties = {
   height: 28,
-  background: "#1f2a3a", // dark header
+  background: "#1f2a3a",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -766,7 +821,7 @@ const titleBar: React.CSSProperties = {
 
 const subTitleBar: React.CSSProperties = {
   height: 28,
-  background: "#2b4d87", // blue bar like Delivery Details
+  background: "#2b4d87",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -804,6 +859,11 @@ const select: React.CSSProperties = {
   fontSize: 12,
 };
 
+const selectSearch: React.CSSProperties = {
+  ...select,
+  paddingLeft: 6,
+};
+
 const datePickerHidden: React.CSSProperties = {
   position: "absolute",
   left: 0,
@@ -815,14 +875,12 @@ const datePickerHidden: React.CSSProperties = {
 };
 
 const dateBox: React.CSSProperties = {
-  position: "relative",   // IMPORTANT for hidden date picker
+  position: "relative",
   display: "flex",
   alignItems: "center",
   width: 210,
   borderBottom: "1px solid #c1c7d0",
 };
-
-
 
 const dateInput: React.CSSProperties = {
   ...input,
@@ -841,48 +899,93 @@ const calBtn: React.CSSProperties = {
   marginLeft: 6,
 };
 
-const bottomNo: React.CSSProperties = {
-  marginTop: 24,
-  color: "#c02626",
-  fontWeight: 800,
-  textAlign: "center",
+const searchInput: React.CSSProperties = {
+  height: 28,
+  border: "1px solid #c1c7d0",
+  background: "#ffffff",
+  outline: "none",
+  borderRadius: 6,
+  padding: "0 10px",
+  fontSize: 12,
 };
 
-const pillBtn: React.CSSProperties = {
-  height: 34,
-  padding: "0 14px",
-  border: "1px solid #d0d7e2",
-  borderRadius: 14,
-  background: "#f5f7fb",
-  fontWeight: 700,
+const btnTop: React.CSSProperties = {
+  height: 28,
+  borderRadius: 6,
+  border: "1px solid #a9a9a9",
+  background: "#e9e2d3",
+  fontSize: 12,
+  padding: "0 10px",
   cursor: "pointer",
+  fontWeight: 700,
+};
+
+const btnTopDanger: React.CSSProperties = {
+  ...btnTop,
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  color: "#b91c1c",
+};
+
+const tableWrap: React.CSSProperties = {
+  flex: 1,
+  overflow: "auto",
+  borderRadius: 8,
+  border: "1px solid #eef2f7",
+  background: "white",
+};
+
+const table: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  background: "white",
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 10px",
   fontSize: 12,
-  color: "#6b7280",
+  color: "#64748b",
+  padding: "8px 10px",
+  borderBottom: "1px solid #eef2f7",
+  background: "#fafbff",
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  whiteSpace: "nowrap",
 };
 
 const td: React.CSSProperties = {
-  padding: "10px 10px",
+  padding: "8px 10px",
+  borderBottom: "1px solid #f1f5f9",
   fontSize: 12,
-  color: "#111827",
-  verticalAlign: "top",
+  color: "#0f172a",
+  whiteSpace: "nowrap",
+};
+
+const emptyTd: React.CSSProperties = {
+  padding: 16,
+  color: "#64748b",
+  textAlign: "center",
 };
 
 const miniBtn: React.CSSProperties = {
-  height: 28,
-  padding: "0 10px",
-  border: "1px solid #d0d7e2",
-  borderRadius: 10,
-  background: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
+  height: 24,
+  borderRadius: 6,
+  border: "1px solid #a9a9a9",
+  background: "#e9e2d3",
   fontSize: 12,
+  padding: "0 8px",
+  cursor: "pointer",
+  marginRight: 6,
 };
 
+const miniBtnDanger: React.CSSProperties = {
+  ...miniBtn,
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  color: "#b91c1c",
+};
 
 function ActionBtn({
   label,

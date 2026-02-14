@@ -13,6 +13,7 @@ import TransactionsEntry from "./pages/transactions/TransactionsEntry";
 import TransactionsFind from "./pages/transactions/TransactionsFind";
 import PaymentTypes from "./pages/PaymentTypes";
 import Flags from "./pages/Flags";
+import TransactionsReport from "./pages/transactions/TransactionsReport";
 
 
 
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/transactions/*" element={<TransactionsShell />}>
             <Route path="entry" element={<TransactionsEntry />} />
             <Route path="find" element={<TransactionsFind />} />
+            <Route path="report/:id" element={<TransactionsReport />} />
           </Route>
 
 
