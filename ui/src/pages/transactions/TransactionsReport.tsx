@@ -177,6 +177,16 @@ export default function TransactionsReport() {
     window.location.href = url;
   }
 
+  async function copyPreview() {
+    try {
+        await navigator.clipboard.writeText(note);
+        alert("Copied to clipboard ✅");
+    } catch (err) {
+        alert("Failed to copy");
+    }
+  }
+
+
   if (loading) return <div style={{ padding: 20 }}>Loading report...</div>;
   if (!tx) return <div style={{ padding: 20 }}>No transaction found</div>;
 
@@ -243,7 +253,29 @@ export default function TransactionsReport() {
         </div>
 
         {/* Printable text (optional) */}
-        <pre style={printBox}>{note}</pre>
+        <div style={{ position: "relative" }}>
+            <button
+                onClick={copyPreview}
+                style={{
+                position: "absolute",
+                right: 10,
+                top: 10,
+                padding: "4px 10px",
+                fontSize: 12,
+                cursor: "pointer",
+                border: "1px solid #b0b8c4",
+                background: "#f5f5f5",
+                borderRadius: 4
+                }}
+            >
+                Copy
+            </button>
+
+            <pre style={printBox}>
+                {note}
+            </pre>
+         </div>
+
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import TransactionsFind from "./pages/transactions/TransactionsFind";
 import PaymentTypes from "./pages/PaymentTypes";
 import Flags from "./pages/Flags";
 import TransactionsReport from "./pages/transactions/TransactionsReport";
+import DayWiseReport from "./pages/reports/DayWiseReport";
 
 
 
@@ -67,11 +68,12 @@ export default function App() {
             <Route path="entry" element={<TransactionsEntry />} />
             <Route path="find" element={<TransactionsFind />} />
             <Route path="report/:id" element={<TransactionsReport />} />
+
           </Route>
 
 
           {/* REPORTS (right-side legacy menu) */}
-          <Route path="/reports/day-wise" element={<P title="Day Wise Report" />} />
+          <Route path="/reports/day-wise" element={<DayWiseReport />} />
           <Route path="/reports/item-wise" element={<P title="Item Wise Report" />} />
           <Route path="/reports/client-wise-report" element={<P title="Client Wise Report" />} />
           <Route path="/reports/client-wise-abstract" element={<P title="Client Wise Abstract" />} />
