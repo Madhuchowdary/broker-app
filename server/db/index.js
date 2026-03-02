@@ -185,6 +185,17 @@ db.exec(`
   END;
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  INSERT OR IGNORE INTO app_settings (key, value)
+  VALUES ('GST', '');
+`);
+
 
 
 module.exports = db;

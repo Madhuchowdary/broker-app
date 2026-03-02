@@ -14,6 +14,9 @@ const qtyTypesRouter = require("./routes/qty-types");
 const ratePerUnitRouter = require("./routes/rate-per-unit");
 const itemTypesRouter = require("./routes/itemTypes");
 const transactionsRouter = require("./routes/transactions");
+const settingsRouter = require("./routes/settings");
+const mailRouter = require("./routes/mail");
+const reportsRouter = require("./routes/reports");
 
 const app = express();
 
@@ -33,6 +36,9 @@ app.use("/api/qty-types", qtyTypesRouter);
 app.use("/api/rate-per-unit", ratePerUnitRouter);
 app.use("/api/item-types", itemTypesRouter);
 app.use("/api/transactions", transactionsRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api/mail", mailRouter);
+app.use("/api/reports", reportsRouter);
 
 
 const PORT = process.env.PORT || 4000;

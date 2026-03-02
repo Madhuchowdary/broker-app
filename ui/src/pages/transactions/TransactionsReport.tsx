@@ -35,6 +35,9 @@ const BROKER = {
 
 function buildConfirmationNote(tx: Tx, seller: Client, buyer: Client) {
   const lines: string[] = [];
+  const confirmDate = tx?.confirm_date || tx?.confirmDate || "-";
+  const itemType = tx?.product || "-";
+
 
   // ✅ BROKER (ALWAYS CONSTANT)
   lines.push(BROKER.name);
@@ -58,10 +61,13 @@ function buildConfirmationNote(tx: Tx, seller: Client, buyer: Client) {
   lines.push("CONFIRMATION NOTE");
   lines.push("");
   lines.push(`Date: ${tx?.confirm_date || tx?.confirmDate || "-"}`);
-  lines.push(`Transaction No: ${tx?.transaction_id || "-"}`);
+  lines.push(`Transaction No: ${tx?.id || "-"}`);
   lines.push("");
 
   lines.push("Dear Sirs,");
+  lines.push(
+    `As per your telephonic instructions dated ${confirmDate}, we confirm having sold the following quantity of ${itemType} on your account and at your risk.`
+  );
   lines.push("");
 
   // ✅ BUYER DETAILS AS “To Whom (Buyer)”
@@ -160,21 +166,118 @@ export default function TransactionsReport() {
 
   const note = React.useMemo(() => buildConfirmationNote(tx || {}, seller || {}, buyer || {}), [tx, seller, buyer]);
 
-  function sendWhatsApp(who: "seller" | "buyer") {
-    const c = who === "seller" ? seller : buyer;
-    const num = digitsOnly(c?.mobile);
-    if (!num) return alert("No mobile/whatsapp number in client master");
-    const url = `https://wa.me/${num}?text=${encodeURIComponent(note)}`;
-    window.open(url, "_blank");
+ function fmt(v: any) {
+  return (v ?? "").toString().trim();
+}
+
+function whatsappLine(who: "seller" | "buyer") {
+  const confirmDate = fmt(tx?.confirm_date || tx?.confirmDate || "-");
+  const confNo = fmt(tx?.id || "-");
+  const product = fmt(tx?.product || "-");
+  const qty = fmt(tx?.quantity || "-");
+  const unitQty = fmt(tx?.unit_qty || tx?.unitQty || "");
+  const rate = fmt(tx?.rate || "-");
+  const unitRate = fmt(tx?.unit_rate || tx?.unitRate || "");
+  const tax = fmt(tx?.tax || "");
+
+  const sellerName = fmt(seller?.name || tx?.seller || "Seller");
+  const buyerName = fmt(buyer?.name || tx?.buyer || "Buyer");
+
+  // Short “old UI style” text
+  if (who === "seller") {
+    // Sent to SELLER mobile: “Sold ... to BUYER ...”
+    return `Sold ${qty}${unitQty ? " " + "_" + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} to ${buyerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
   }
 
-  function sendEmail(who: "seller" | "buyer") {
+  // Sent to BUYER mobile: “Purchased ... from SELLER ...”
+  return `Purchased ${qty}${unitQty ? " " + "_" + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} from ${sellerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
+}
+
+function buildWhatsAppMessage(who: "seller" | "buyer") {
+  // Polished message (multi-line) – WhatsApp friendly + professional
+  const confirmDate = fmt(tx?.confirm_date || tx?.confirmDate || "-");
+  const confNo = fmt(tx?.transaction_id || "-");
+  const product = fmt(tx?.product || "-");
+  const qty = fmt(tx?.quantity || "-");
+  const unitQty = fmt(tx?.unit_qty || tx?.unitQty || "");
+  const rate = fmt(tx?.rate || "-");
+  const unitRate = fmt(tx?.unit_rate || tx?.unitRate || "");
+  const tax = fmt(tx?.tax || "");
+  const place = fmt(tx?.delivery_place || tx?.deliveryPlace || "-");
+  const delDate = fmt(tx?.delivery_date || tx?.deliveryDate || "-");
+  const payment = fmt(tx?.payment || "-");
+
+  const sellerName = fmt(seller?.name || tx?.seller || "Seller");
+  const buyerName = fmt(buyer?.name || tx?.buyer || "Buyer");
+
+  const header = "CONFIRMATION NOTE";
+  const action =
+    who === "seller"
+      ? `SOLD to ${buyerName}`
+      : `PURCHASED from ${sellerName}`;
+
+  return [
+    // header,
+    // `Date: ${confirmDate}`,
+    // `Confirmation No: ${confNo}`,
+    // `Transaction: ${action}`,
+    // `Item: ${product}`,
+    // `Qty: ${qty}${unitQty ? " " + unitQty : ""}`,
+    // `Rate: Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? " (" + tax + ")" : ""}`,
+    // `Place of Delivery: ${place}`,
+    // `Delivery Date: ${delDate}`,
+    // `Payment: ${payment}`,
+    // "",
+    // "—",
+    whatsappLine(who), // keeps the exact “old UI line” too
+  ].join("\n");
+}
+
+async function sendWhatsApp(who: "seller" | "buyer") {
+  const c = who === "seller" ? seller : buyer;
+  const num = digitsOnly(c?.mobile);
+  if (!num) return alert("No mobile/whatsapp number in client master");
+
+  const msg = buildWhatsAppMessage(who);
+
+  // 1) Copy to clipboard
+  try {
+    await navigator.clipboard.writeText(msg);
+  } catch {
+    // Clipboard can fail if not https / permissions. Still continue to WhatsApp.
+  }
+
+  // 2) Open WhatsApp with message prefilled
+  const url = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  window.open(url, "_blank");
+}
+
+
+  async function sendEmail(who: "seller" | "buyer") {
     const c = who === "seller" ? seller : buyer;
     const to = (c?.email || "").trim();
     if (!to) return alert("No email in client master");
-    const subj = `Confirmation Note - ${tx?.transaction_id || ""}`;
-    const url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(note)}`;
-    window.location.href = url;
+
+    const subject = `Confirmation Note - ${tx?.transaction_id || ""}`;
+
+    const res = await fetch("/api/mail/transaction-note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to,
+        subject,
+        body: note,
+        cc: "", // optional extra cc if you want
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err?.message || "Email send failed");
+      return;
+    }
+
+    alert("Email sent ✅ (to client + cc broker)");
   }
 
   async function copyPreview() {
@@ -186,6 +289,9 @@ export default function TransactionsReport() {
     }
   }
 
+  function safe(v: any) {
+    return (v ?? "").toString().trim();
+  }
 
   if (loading) return <div style={{ padding: 20 }}>Loading report...</div>;
   if (!tx) return <div style={{ padding: 20 }}>No transaction found</div>;
@@ -217,8 +323,10 @@ export default function TransactionsReport() {
           <div style={contactRow}>
             <div style={contactLeft}>Seller Mobile</div>
             <div style={contactMidYellow}>{seller?.mobile || "-"}</div>
-            <div style={contactMsg}>
-              {tx?.product ? `Sold ${tx.product} Qty ${tx.quantity || "-"} @ ${tx.rate || "-"} ${tx.tax || ""}` : "—"}
+           <div style={contactMsg}>
+              {tx?.product
+                ? `Sold ${safe(tx.quantity)} _  ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} to ${safe(buyer?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
+                : "—"}
             </div>
             <button style={sendBtn} onClick={() => sendWhatsApp("seller")}>Send</button>
           </div>
@@ -234,7 +342,9 @@ export default function TransactionsReport() {
             <div style={contactLeft}>Buyer Mobile</div>
             <div style={{ ...contactMidYellow, background: "#a6e8ff" }}>{buyer?.mobile || "-"}</div>
             <div style={contactMsgBlue}>
-              {tx?.product ? `Purchased ${tx.product} Qty ${tx.quantity || "-"} @ ${tx.rate || "-"} ${tx.tax || ""}` : "—"}
+              {tx?.product
+                ? `Purchased ${safe(tx.quantity)}  _ ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} from ${safe(seller?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
+                : "—"}
             </div>
             <button style={sendBtn} onClick={() => sendWhatsApp("buyer")}>Send</button>
           </div>
@@ -299,10 +409,10 @@ const leftVal: React.CSSProperties = { padding: 8, borderBottom: "1px solid #c8c
 const rightVal: React.CSSProperties = { padding: 8, borderBottom: "1px solid #c8ced8", fontSize: 12 };
 
 const contactBlock: React.CSSProperties = { borderTop: "1px solid #c8ced8",padding:"5px" };
-const contactRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "120px 220px 1fr 90px", gap: 0, alignItems: "stretch" };
+const contactRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "120px 350px 1fr 90px", gap: 0, alignItems: "stretch" };
 const contactLeft: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", background: "#f7f7f7", fontSize: 12 };
 const contactMidYellow: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", background: "#fff3b0", fontWeight: 800 };
-const contactMid: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", background: "#f5f5f5" };
+const contactMid: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", background: "#f5f5f5" ,wordWrap:"break-word"};
 const contactMsg: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", fontSize: 12 };
 const contactMsgBlue: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", fontSize: 12, background: "#bfefff" };
 const contactMsgSmall: React.CSSProperties = { padding: 10, borderBottom: "1px solid #c8ced8", fontSize: 12, color: "#374151" };

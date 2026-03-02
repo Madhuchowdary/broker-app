@@ -31,12 +31,12 @@ const subTabs: Record<TopKey, { label: string; path: string }[]> = {
   ],
 };
 
-const reportsMenu: { label: string; path: string }[] = [
-  { label: "1 : Day Wise Report", path: "/reports/day-wise" },
-  { label: "2 : Item Wise Report", path: "/reports/item-wise" },
-  { label: "3 : Client Wise Report", path: "/reports/client-wise-report" },
-  { label: "4 : Client Wise Abstract", path: "/reports/client-wise-abstract" },
-];
+// const reportsMenu: { label: string; path: string }[] = [
+//   { label: "1 : Day Wise Report", path: "/reports/day-wise" },
+//   { label: "2 : Item Wise Report", path: "/reports/item-wise" },
+//   { label: "3 : Client Wise Report", path: "/reports/client-wise-report" },
+//   { label: "4 : Client Wise Abstract", path: "/reports/client-wise-abstract" },
+// ];
 
 function getActiveTop(pathname: string): TopKey {
   if (pathname.startsWith("/transactions")) return "transactions";
@@ -112,7 +112,7 @@ export default function MainLayout() {
           </div>
 
           {/* Right legacy button column */}
-          <div style={reportsRight}>
+          {/* <div style={reportsRight}>
             <div style={reportsBtnCol}>
               {reportsMenu.map((r) => (
                 <NavLink
@@ -140,7 +140,7 @@ export default function MainLayout() {
                 <div key={i} style={reportsEmptySlot} />
               ))}
             </div>
-          </div>
+          </div> */}
         </div>
       ) : isMaintenance ? (
         <div style={maintenanceShell}>

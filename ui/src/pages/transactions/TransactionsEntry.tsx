@@ -9,6 +9,57 @@ type FormState = Omit<Transaction, "status"> & {
 
 const TX_API = "/api/transactions";
 
+
+// --- normalize API -> form (api uses snake_case, UI uses camelCase) ---
+function asDDMMYY(v: any): string {
+  const s = (v ?? "").toString().trim();
+  if (!s) return "";
+  // already dd-mm-yy or dd/mm/yy
+  if (/^\d{2}[-/]\d{2}[-/]\d{2}$/.test(s)) return s.replaceAll("/", "-");
+  // ISO yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = fromISODate(s.slice(0, 10));
+    return toDDMMYY(d);
+  }
+  return s;
+}
+
+function normalizeTxToForm(r: any): Partial<FormState> {
+  if (!r) return {};
+  const statusStr = (r.status ?? "UNDELIVERED").toString().toUpperCase();
+
+  return {
+    id: Number(r.id || 0),
+
+    seller: (r.seller ?? "").toString(),
+    sellerBrokerage: (r.seller_brokerage ?? r.sellerBrokerage ?? "").toString(),
+    buyer: (r.buyer ?? "").toString(),
+    buyerBrokerage: (r.buyer_brokerage ?? r.buyerBrokerage ?? "").toString(),
+
+    product: (r.product ?? "").toString(),
+    rate: (r.rate ?? "").toString(),
+    unitRate: (r.unit_rate ?? r.unitRate ?? "").toString(),
+    tax: (r.tax ?? "Incl GST").toString(),
+    quantity: (r.quantity ?? "").toString(),
+    unitQty: (r.unit_qty ?? r.unitQty ?? "").toString(),
+
+    confirmDate: asDDMMYY(r.confirm_date ?? r.confirmDate),
+    deliveryDate: asDDMMYY(r.delivery_date ?? r.deliveryDate),
+    deliveryTime: (r.delivery_time ?? r.deliveryTime ?? "").toString(),
+    deliveryPlace: (r.delivery_place ?? r.deliveryPlace ?? "").toString(),
+    payment: (r.payment ?? "").toString(),
+    flag: (r.flag ?? "").toString(),
+
+    status: (statusStr === "DELIVERED" ? "DELIVERED" : "UNDELIVERED") as any,
+
+    tankerNo: (r.tanker_no ?? r.tankerNo ?? "").toString(),
+    billNo: (r.bill_no ?? r.billNo ?? "").toString(),
+    deliveryQty: (r.delivery_qty ?? r.deliveryQty ?? "0").toString(),
+    deliveryUnitQty: (r.delivery_unit_qty ?? r.deliveryUnitQty ?? "").toString(),
+    amountRs: (r.amount_rs ?? r.amountRs ?? "0.00").toString(),
+  };
+} 
+
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
@@ -58,6 +109,51 @@ export default function TransactionsEntry() {
   const nav = useNavigate();
   const store = useContext(TxContext);
   const [deliveryDateTouched, setDeliveryDateTouched] = useState(false);
+  const [gstOpen, setGstOpen] = React.useState(false);
+  const [gstValue, setGstValue] = React.useState("");
+  const [gstSaving, setGstSaving] = React.useState(false);
+  const fromDateRef = React.useRef<HTMLInputElement | null>(null);
+
+    // load once
+    React.useEffect(() => {
+      let alive = true;
+      (async () => {
+        try {
+          const res = await fetch("/api/settings/gst");
+          const data = await res.json();
+          if (!alive) return;
+          setGstValue((data?.gst ?? "").toString());
+        } catch (e) {
+          console.error(e);
+          // don't block transactions screen for this
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }, []);
+
+    async function saveGst() {
+      try {
+        setGstSaving(true);
+        const res = await fetch("/api/settings/gst", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gst: gstValue }),
+        });
+        if (!res.ok) {
+          alert("GST save failed");
+          return;
+        }
+        const data = await res.json();
+        setGstValue((data?.gst ?? "").toString());
+        alert("GST saved");
+      } finally {
+        setGstSaving(false);
+      }
+    }
+      
+
 
   if (!store) return null;
 
@@ -74,6 +170,19 @@ export default function TransactionsEntry() {
   const [gridLoading, setGridLoading] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  function setConfirmDateDDMMYY(next: string) {
+  set("confirmDate", next);
+
+  const d = fromDDMMYY(next);
+  if (!d) return;
+
+  // auto set deliveryDate only if user didn’t manually touch it
+  if (!deliveryDateTouched) {
+    set("deliveryDate", toDDMMYY(addDays(d, 7)));
+  }
+}
+
 
   function toggleSelect(id: number, checked: boolean) {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
@@ -156,13 +265,33 @@ export default function TransactionsEntry() {
 
   async function save() {
     const isNew = !selectedId || form.id === 0;
-    const url = isNew ? TX_API : `${TX_API}/${selectedId}`;
+
+    // If user entered Delivery Date in delivery panel, treat it as delivered update
+    const isDeliverUpdate = !isNew && showDeliveryPanel && form.status === "DELIVERED";
+
+    const url = isNew
+      ? TX_API
+      : isDeliverUpdate
+        ? `${TX_API}/${selectedId}/deliver`
+        : `${TX_API}/${selectedId}`;
+
     const method = isNew ? "POST" : "PUT";
+
+    const payload = isDeliverUpdate
+      ? {
+          deliveryDate: form.deliveryDate,
+          tankerNo: form.tankerNo,
+          billNo: form.billNo,
+          deliveryQty: form.deliveryQty,
+          deliveryUnitQty: form.deliveryUnitQty,
+          amountRs: form.amountRs,
+        }
+      : form;
 
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -179,9 +308,12 @@ export default function TransactionsEntry() {
     });
 
     setSelectedId(saved.id);
+    setForm((p) => ({ ...p, ...normalizeTxToForm(saved) } as any));
 
-    // keep tx id visible even if FormState type doesn't include it
-    setForm((p) => ({ ...p, ...(saved || {}) }));
+    // If delivered, close delivery panel after saving
+    if ((saved?.status || "").toString().toUpperCase() === "DELIVERED") {
+      setShowDeliveryPanel(false);
+    }
   }
 
   async function update() {
@@ -343,8 +475,12 @@ export default function TransactionsEntry() {
   // if user selects something from Find, we load that record into form
   React.useEffect(() => {
     if (!selected) return;
-    setForm((p) => ({ ...p, ...selected } as any));
-    setDeliveryDateTouched(true); // loaded record has its own deliveryDate
+
+    const norm = normalizeTxToForm(selected);
+    setForm((p) => ({ ...p, ...norm } as any));
+
+    setDeliveryDateTouched(true);
+    setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
   }, [selected]);
 
   return (
@@ -459,9 +595,9 @@ export default function TransactionsEntry() {
 
               <Row label="Tax" rowStyle={row} lblStyle={lbl}>
                 <select style={select} value={form.tax} onChange={(e) => set("tax", e.target.value)}>
-                  <option>Plus VAT</option>
+                  <option>Incl GST</option>
                   <option>Plus GST</option>
-                  <option>VAT Exempt</option>
+                  <option>GST Exempt</option>
                 </select>
               </Row>
 
@@ -482,59 +618,60 @@ export default function TransactionsEntry() {
               <div style={{ fontSize: 12, textAlign: "center", marginTop: 10 }}>
                   S NO: {(form as any).id || "-"}
               </div>  
-
-              <div style={{ fontSize: 12, textAlign: "center", marginTop: 10 }}>
-                Tx ID: {(form as any).transaction_id || "-"}
-              </div>
             </Section>
 
             <Section title="Transaction Details" titleColor="#ff7a18" sectionStyle={section} titleBarStyle={titleBar}>
               <Row label="Confirm Date" rowStyle={row} lblStyle={lbl}>
                 <div style={dateBox}>
-                  <input style={dateInput} value={form.confirmDate} readOnly />
+                   <input
+                        style={dateInput}
+                        value={form.confirmDate}
+                        onChange={(e) => setConfirmDateDDMMYY(e.target.value)}
+                        placeholder="dd-mm-yy"
+                    />
 
-                  <input
-                    type="date"
-                    style={datePickerHidden}
-                    value={toISODate(fromDDMMYY(form.confirmDate) || new Date())}
-                    onChange={(e) => {
-                      const d = fromISODate(e.target.value);
-                      set("confirmDate", toDDMMYY(d));
 
-                      if (!deliveryDateTouched) {
-                        set("deliveryDate", toDDMMYY(addDays(d, 7)));
-                      }
-                    }}
-                  />
+                    <input
+                        type="date"
+                        style={datePickerHidden}
+                        value={toISODate(fromDDMMYY(form.confirmDate) || new Date())}
+                        onChange={(e) => {
+                            const d = fromISODate(e.target.value);
+                            setConfirmDateDDMMYY(toDDMMYY(d));
+                        }}
+                    />
 
-                  <div style={calBtn}>📅</div>
-                </div>
-              </Row>
-
-              <Row label="Delivery Date" rowStyle={row} lblStyle={lbl}>
-                <div style={dateBox}>
-                  <input style={dateInput} value={form.deliveryDate ?? ""} readOnly />
-
-                  <input
-                    type="date"
-                    style={datePickerHidden}
-                    value={toISODate(
-                      fromDDMMYY(form.deliveryDate || "") || addDays(fromDDMMYY(form.confirmDate) || new Date(), 7)
-                    )}
-                    onChange={(e) => {
-                      const d = fromISODate(e.target.value);
-                      setDeliveryDateTouched(true);
-                      set("deliveryDate", toDDMMYY(d));
-                    }}
-                  />
 
                   <div style={calBtn}>📅</div>
                 </div>
               </Row>
 
               <Row label="Delivery Time" rowStyle={row} lblStyle={lbl}>
-                <input style={input} value={form.deliveryTime} onChange={(e) => set("deliveryTime", e.target.value)} />
+                <div style={dateBox}>
+                  <input
+                    style={dateInput}
+                    value={form.deliveryDate ?? ""}
+                    onChange={(e) => {
+                        setDeliveryDateTouched(true);
+                        set("deliveryDate", e.target.value);
+                    }}
+                    placeholder="dd-mm-yy"
+                  />
+                 <input
+                    type="date"
+                    style={datePickerHidden}
+                    value={toISODate(fromDDMMYY(form.deliveryDate || "") || addDays(fromDDMMYY(form.confirmDate) || new Date(), 7))}
+                    onChange={(e) => {
+                        const d = fromISODate(e.target.value);
+                        setDeliveryDateTouched(true);
+                        set("deliveryDate", toDDMMYY(d));
+                    }}
+                    />
+                  <div style={calBtn}>📅</div>
+                </div>
               </Row>
+
+              
 
               <Row label="Delivery Place" rowStyle={row} lblStyle={lbl}>
                 <input
@@ -572,6 +709,37 @@ export default function TransactionsEntry() {
                   <div style={subTitleBar}>
                     <div style={{ color: "#ffd400", fontWeight: 800 }}>Delivery Details</div>
                   </div>
+
+                  <Row label="Delivery Date" rowStyle={row} lblStyle={lbl}>
+                    <div style={dateBox}>
+                      <input
+                        style={dateInput}
+                        value={form.deliveryDate ?? ""}
+                        onChange={(e) => {
+                          setDeliveryDateTouched(true);
+                          set("deliveryDate", e.target.value);
+                          set("status", "DELIVERED" as any);
+                        }}
+                      />
+
+                      <input
+                        type="date"
+                        style={datePickerHidden}
+                        value={toISODate(
+                          fromDDMMYY(form.deliveryDate || "") ||
+                            addDays(fromDDMMYY(form.confirmDate) || new Date(), 7)
+                        )}
+                        onChange={(e) => {
+                          const d = fromISODate(e.target.value);
+                          setDeliveryDateTouched(true);
+                          set("deliveryDate", toDDMMYY(d));
+                          set("status", "DELIVERED" as any);
+                        }}
+                      />
+
+                      <div style={calBtn}>📅</div>
+                    </div>
+                  </Row>
 
                   <div style={{ padding: 12 }}>
                     <Row label="Tanker No" rowStyle={row} lblStyle={lbl}>
@@ -649,7 +817,6 @@ export default function TransactionsEntry() {
                       />
                     </th>
                     <th style={th}>ID</th>
-                    <th style={th}>Tx ID</th>
                     <th style={th}>Seller</th>
                     <th style={th}>Buyer</th>
                     <th style={th}>Product</th>
@@ -691,7 +858,6 @@ export default function TransactionsEntry() {
                           />
                         </td>
                         <td style={td}>{r.id}</td>
-                        <td style={td}>{r.transaction_id || "-"}</td>
                         <td style={td}>{r.seller || ""}</td>
                         <td style={td}>{r.buyer || ""}</td>
                         <td style={td}>{r.product || ""}</td>
@@ -709,9 +875,11 @@ export default function TransactionsEntry() {
                           <button
                             style={miniBtn}
                             onClick={() => {
+                              const norm = normalizeTxToForm(r);
                               setSelectedId(Number(r.id));
-                              setShowDeliveryPanel((r.status || "") === "UNDELIVERED");
-                              setForm((p) => ({ ...p, ...(r as any) }));
+                              setDeliveryDateTouched(true);
+                              setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
+                              setForm((p) => ({ ...p, ...norm } as any));
                             }}
                           >
                             Modify
@@ -752,6 +920,40 @@ export default function TransactionsEntry() {
             btnStyle={btn}
          />
 
+          {/* GST Expandable Panel */}
+          <div style={gstWrap}>
+            <button
+              style={gstHeaderBtn}
+              onClick={() => setGstOpen((p) => !p)}
+              type="button"
+            >
+              <span>GST</span>
+              <span style={{ marginLeft: "auto" }}>{gstOpen ? "▾" : "▸"}</span>
+            </button>
+
+            {gstOpen && (
+              <div style={gstBody}>
+                <div style={gstRow}>
+                  <div style={gstLabel}>GST</div>
+                  <input
+                    style={gstInput}
+                    value={gstValue}
+                    onChange={(e) => setGstValue(e.target.value)}
+                    placeholder="Eg: 5"
+                  />
+                </div>
+
+                <button
+                  style={{ ...btn, opacity: gstSaving ? 0.6 : 1 }}
+                  onClick={saveGst}
+                  disabled={gstSaving}
+                  type="button"
+                >
+                  {gstSaving ? "Saving..." : "Save GST"}
+                </button>
+              </div>
+            )}
+          </div>
 
         </div>
       </div>
@@ -866,13 +1068,15 @@ const selectSearch: React.CSSProperties = {
 
 const datePickerHidden: React.CSSProperties = {
   position: "absolute",
-  left: 0,
+  right: 0,
   top: 0,
-  width: 210,
+  width: 28,     // only on icon area
   height: 22,
   opacity: 0,
   cursor: "pointer",
 };
+
+
 
 const dateBox: React.CSSProperties = {
   position: "relative",
@@ -985,6 +1189,55 @@ const miniBtnDanger: React.CSSProperties = {
   border: "1px solid #fecaca",
   background: "#fff1f2",
   color: "#b91c1c",
+};
+
+const gstWrap: React.CSSProperties = {
+  border: "1px solid #8c95a3",
+  background: "#d7f3f7",
+};
+
+const gstHeaderBtn: React.CSSProperties = {
+  width: "100%",
+  height: 32,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  border: "0",
+  background: "#bfe7ef",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "0 10px",
+};
+
+const gstBody: React.CSSProperties = {
+  padding: 10,
+  borderTop: "1px solid #8c95a3",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const gstRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "60px 1fr",
+  gap: 8,
+  alignItems: "center",
+};
+
+const gstLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#334155",
+  fontWeight: 700,
+};
+
+const gstInput: React.CSSProperties = {
+  height: 24,
+  border: "1px solid #a9a9a9",
+  background: "#ffffff",
+  padding: "0 8px",
+  fontSize: 12,
+  outline: "none",
 };
 
 function ActionBtn({

@@ -74,9 +74,9 @@ export default function App() {
 
           {/* REPORTS (right-side legacy menu) */}
           <Route path="/reports/day-wise" element={<DayWiseReport />} />
-          <Route path="/reports/item-wise" element={<P title="Item Wise Report" />} />
+          {/* <Route path="/reports/item-wise" element={<P title="Item Wise Report" />} />
           <Route path="/reports/client-wise-report" element={<P title="Client Wise Report" />} />
-          <Route path="/reports/client-wise-abstract" element={<P title="Client Wise Abstract" />} />
+          <Route path="/reports/client-wise-abstract" element={<P title="Client Wise Abstract" />} /> */}
 
           {/* If you still want Bill later keep it, else remove */}
           <Route path="/reports/bill" element={<P title="Bill (Main Report)" />} />
