@@ -88,6 +88,17 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
+async function fetchClientByName(name: string) {
+  const q = (name || "").trim();
+  if (!q) return null;
+
+  const data = await fetchJson(`/api/clients?q=${encodeURIComponent(q)}`);
+  if (!Array.isArray(data) || data.length === 0) return null;
+
+  const exact = data.find((x: any) => norm(x?.name) === norm(q));
+  return exact || data[0];
+}
+
 export default function DayWiseReport() {
   const today = React.useMemo(() => new Date(), []);
 
@@ -104,6 +115,7 @@ export default function DayWiseReport() {
   const [rows, setRows] = React.useState<TxRow[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [selectedClient, setSelectedClient] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -149,8 +161,13 @@ export default function DayWiseReport() {
     setRows([]);
 
     try {
-      const all = await fetchJson("/api/transactions");
+      const [all, clientRec] = await Promise.all([
+        fetchJson("/api/transactions"),
+        clientName.trim() ? fetchClientByName(clientName.trim()) : Promise.resolve(null),
+      ]);
+
       const list: TxRow[] = Array.isArray(all) ? all : [];
+      setSelectedClient(clientRec);
 
       const cn = norm(clientName);
       const it = norm(itemName);
@@ -173,7 +190,18 @@ export default function DayWiseReport() {
         return true;
       });
 
-      setRows(filtered);
+      filtered.sort((a, b) => {
+      const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+      const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+
+      // oldest first
+      if (da !== db) return da - db;
+
+      // if same date, smaller id first
+      return Number(a.id ?? 0) - Number(b.id ?? 0);
+    });
+
+    setRows(filtered);
     } catch (e) {
       console.error(e);
       setError("Failed to load transactions. Check API / server logs.");
@@ -220,20 +248,20 @@ export default function DayWiseReport() {
     return `Item : ${item}  Report  From ${toDMonYY(fromDate)} To ${toDMonYY(toDate)}`;
   }, [reportMode, itemName, clientName, fromDate, toDate]);
 
-  function buildClientWisePdf() {
+  function buildClientWisePdf(sortedRows) {
     const doc = new jsPDF("p", "pt", "a4");
     const pageW = doc.internal.pageSize.getWidth();
 
     const broker = {
-      name: safe(selectedCompany?.name) || "ANIL A SHAH",
-      line1: safe(selectedCompany?.title) || "Edible Oil, Seed and Cake Brokers",
-      addr1: safe(selectedCompany?.address) || "Post Box No. 18, 68/39C, Mahaveer Colony",
-      addr2: safe(selectedCompany?.near) || "Near Urban Bank",
-      city: safe(selectedCompany?.city_state) || "Kurnool - ( A.P ) - 518001",
-      pan: safe(selectedCompany?.pan_no) || "ATUPS6245G",
-      bank: safe(selectedCompany?.bank) || "Union Bank of India (Kurnool)",
-      ifsc: safe(selectedCompany?.ifsc_code) || "UBIN0803201",
-      acNo: safe(selectedCompany?.account_no) || "0320100299000000",
+      name: safe(selectedCompany?.name) || "",
+      line1: safe(selectedCompany?.title) || "",
+      addr1: safe(selectedCompany?.address) || "",
+      addr2: safe(selectedCompany?.near) || "",
+      city: safe(selectedCompany?.city_state) || "",
+      pan: safe(selectedCompany?.pan_no) || "",
+      bank: safe(selectedCompany?.bank) || "U",
+      ifsc: safe(selectedCompany?.ifsc_code) || "",
+      acNo: safe(selectedCompany?.account_no) || "",
       contact: safe(selectedCompany?.contact_nos),
       email: safe(selectedCompany?.email),
     };
@@ -248,10 +276,23 @@ export default function DayWiseReport() {
 
     doc.setFont("times", "normal");
     doc.setFontSize(11);
-    doc.text(broker.line1, 45, 76);
-    doc.text(broker.addr1, 45, 94);
-    doc.text(broker.addr2, 45, 112);
-    doc.text(broker.city, 45, 130);
+    let YVal = 76;
+    const maxWidth = 240; // width allowed for address block
+
+    const lines = [
+      broker.line1,
+      broker.addr1,
+      broker.addr2,
+      broker.city
+    ];
+
+    lines.forEach((text) => {
+      if (!text) return;
+
+      const wrapped = doc.splitTextToSize(text, maxWidth);
+      doc.text(wrapped, 45, YVal);
+      YVal += wrapped.length * 16; // move down depending on wrapped lines
+    });
 
     doc.text(`PAN No : ${broker.pan}`, pageW - 210, 55);
     doc.text(broker.bank, pageW - 210, 74);
@@ -260,11 +301,31 @@ export default function DayWiseReport() {
 
     doc.roundedRect(40, 150, pageW - 80, 90, 8, 8);
     doc.setFont("times", "bold");
-    doc.text(clientLabel.toUpperCase(), 50, 175);
+    doc.text((safe(selectedClient?.name) || clientLabel).toUpperCase(), 50, 175);
 
     doc.setFont("times", "normal");
-    if (broker.contact) doc.text(`Contact  ${broker.contact}`, 50, 195);
-    if (broker.email) doc.text(`e-Mail  ${broker.email}`, 50, 214);
+
+    const clientAddress = safe(selectedClient?.address);
+    const clientCity = safe(selectedClient?.city_state ?? selectedClient?.cityState);
+    const clientPin = safe(selectedClient?.pin_no ?? selectedClient?.pinNo);
+    const clientMobile = safe(selectedClient?.mobile);
+
+    let y = 195;
+    if (clientAddress) {
+      doc.text(clientAddress, 50, y);
+      y += 19;
+    }
+    if (clientCity) {
+      doc.text(clientCity, 50, y);
+      y += 19;
+    }
+    if (clientPin) {
+      doc.text(`PIN  ${clientPin}`, 50, y);
+      y += 19;
+    }
+    if (clientMobile) {
+      doc.text(`Mobile  ${clientMobile}`, 50, y);
+    }
 
     doc.roundedRect(pageW - 255, 170, 200, 55, 10, 10);
     doc.setFont("times", "bold");
@@ -284,7 +345,7 @@ export default function DayWiseReport() {
     ]];
 
     const cn = norm(clientName);
-    const body = rows.map((r) => {
+    const body = sortedRows.map((r) => {
       const isSeller = norm(r.seller).includes(cn);
       const brokerage = isSeller
         ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
@@ -387,7 +448,7 @@ export default function DayWiseReport() {
     doc.save("client-wise-report.pdf");
   }
 
-  function buildDayOrItemPdf() {
+  function buildDayOrItemPdf(sortedRows) {
     const doc = new jsPDF("p", "pt", "a4");
 
     doc.setFont("times", "bold");
@@ -401,7 +462,7 @@ export default function DayWiseReport() {
     doc.setFontSize(11);
     doc.text(headerLine, 40, 82);
 
-    const body = rows.map((r) => {
+    const body = sortedRows.map((r) => {
       const conf = safe(r.confirm_date ?? r.confirmDate ?? "-");
       const seller = safe(r.seller ?? "-");
       const sb = money(toNumber(r.seller_brokerage ?? r.sellerBrokerage));
@@ -457,11 +518,18 @@ export default function DayWiseReport() {
   }
 
   function buildPdf() {
+    const sortedRows = [...rows].sort((a, b) => {
+    const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+    const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+
+      if (da !== db) return da - db;
+      return Number(a.id ?? 0) - Number(b.id ?? 0);
+    });
     if (reportMode === "client") {
-      buildClientWisePdf();
+      buildClientWisePdf(sortedRows);
       return;
     }
-    buildDayOrItemPdf();
+    buildDayOrItemPdf(sortedRows);
   }
 
   const datePickerHidden: React.CSSProperties = {
@@ -599,6 +667,7 @@ export default function DayWiseReport() {
         </datalist>
       </div>
 
+      {/* Report preview */}
       <div style={reportWrap}>
         <div style={paper}>
           <div style={boxTitleRow}>
@@ -607,66 +676,159 @@ export default function DayWiseReport() {
 
           <div style={subLine}>{headerLine}</div>
 
-          <div style={tableWrap}>
-            <table style={tbl}>
-              <thead>
-                <tr>
-                  <th style={th}>Conf.Date</th>
-                  <th style={th}>Seller Name</th>
-                  <th style={{ ...th, textAlign: "right" }}>S.brok</th>
-                  <th style={th}>Buyer Name</th>
-                  <th style={{ ...th, textAlign: "right" }}>B.brok</th>
-                  <th style={th}>Item Name</th>
-                  <th style={th}>Qty</th>
-                  <th style={th}>Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td style={td} colSpan={8}>
-                      No records
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r, idx) => {
-                    const conf = safe(r.confirm_date ?? r.confirmDate ?? "-");
-                    return (
-                      <tr key={r.id ?? idx}>
-                        <td style={td}>{toDMonYY(conf)}</td>
-                        <td style={td}>{r.seller ?? "-"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{money(toNumber(r.seller_brokerage ?? r.sellerBrokerage))}</td>
-                        <td style={td}>{r.buyer ?? "-"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{money(toNumber(r.buyer_brokerage ?? r.buyerBrokerage))}</td>
-                        <td style={td}>{r.product ?? "-"}</td>
-                        <td style={td}>{r.quantity ?? "-"}</td>
-                        <td style={td}>{r.rate ?? "-"}</td>
+          {reportMode === "client" ? (
+            <>
+              <div style={tableWrap}>
+                <table style={tbl}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Confirm Date</th>
+                      <th style={th}>Seller / Buyer</th>
+                      <th style={{ ...th, textAlign: "right" }}>Price Rs.</th>
+                      <th style={{ ...th, textAlign: "right" }}>Qty</th>
+                      <th style={th}>Qty Unit</th>
+                      <th style={th}>Delivery Date</th>
+                      <th style={th}>Tanker No</th>
+                      <th style={th}>Bill No</th>
+                      <th style={{ ...th, textAlign: "right" }}>Brokerage Rs.</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td style={td} colSpan={9}>
+                          No records
+                        </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                    ) : (
+                      <>
+                        <tr>
+                          <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
+                            {safe(rows[0]?.product).toUpperCase() || "ITEM"}
+                          </td>
+                          <td style={{ ...td, textAlign: "center" }} colSpan={7}>
+                            Brokerage Bill From {fromDate} To {toDate}
+                          </td>
+                        </tr>
 
-          <div style={totalsGrid}>
-            <div style={totalLine}>
-              <span>Seller Brok Total</span>
-              <span style={brMoney}>Rs. {sellerTotal.toFixed(2)}</span>
-            </div>
+                        {rows.map((r, idx) => {
+                          const cn = norm(clientName);
+                          const isSeller = norm(r.seller).includes(cn);
+                          const brokerage = isSeller
+                            ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
+                            : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
 
-            <div style={totalLine}>
-              <span>Buyer Brok Total</span>
-              <span style={brMoney}>Rs. {buyerTotal.toFixed(2)}</span>
-            </div>
+                          const oppositeParty = isSeller
+                            ? safe(r.buyer || "-")
+                            : safe(r.seller || "-");
 
-            <div style={grandRow}>
-              <div style={grandPill}>
-                <span style={{ fontWeight: 900 }}>Grand Total</span>
-                <span style={brMoney}>Rs. {grandTotal.toFixed(2)}</span>
+                          return (
+                            <tr key={r.id ?? idx}>
+                              <td style={td}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
+                              <td style={td}>{oppositeParty}</td>
+                              <td style={{ ...td, textAlign: "right" }}>{safe(r.rate || "-")}</td>
+                              <td style={{ ...td, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
+                              <td style={td}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
+                              <td style={td}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
+                              <td style={td}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
+                              <td style={td}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
+                              <td style={{ ...td, textAlign: "right" }}>{money(brokerage)}</td>
+                            </tr>
+                          );
+                        })}
+
+                        <tr>
+                          <td style={{ ...td, textAlign: "right", fontStyle: "italic" }} colSpan={8}>
+                            {(safe(rows[0]?.product).toUpperCase() || "ITEM")} Total Amount
+                          </td>
+                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
+                            {money(grandTotal)}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }} colSpan={8}>
+                            Grand Total
+                          </td>
+                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
+                            {money(grandTotal)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <div style={tableWrap}>
+                <table style={tbl}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Conf.Date</th>
+                      <th style={th}>Seller Name</th>
+                      <th style={{ ...th, textAlign: "right" }}>S.brok</th>
+                      <th style={th}>Buyer Name</th>
+                      <th style={{ ...th, textAlign: "right" }}>B.brok</th>
+                      <th style={th}>Item Name</th>
+                      <th style={th}>Qty</th>
+                      <th style={th}>Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td style={td} colSpan={8}>
+                          No records
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((r, idx) => {
+                        const conf = (r.confirm_date ?? r.confirmDate ?? "-").toString();
+                        return (
+                          <tr key={r.id ?? idx}>
+                            <td style={td}>{toDMonYY(conf)}</td>
+                            <td style={td}>{r.seller ?? "-"}</td>
+                            <td style={{ ...td, textAlign: "right" }}>
+                              {money(toNumber(r.seller_brokerage ?? r.sellerBrokerage))}
+                            </td>
+                            <td style={td}>{r.buyer ?? "-"}</td>
+                            <td style={{ ...td, textAlign: "right" }}>
+                              {money(toNumber(r.buyer_brokerage ?? r.buyerBrokerage))}
+                            </td>
+                            <td style={td}>{r.product ?? "-"}</td>
+                            <td style={td}>{r.quantity ?? "-"}</td>
+                            <td style={td}>{r.rate ?? "-"}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={totalsGrid}>
+                <div style={totalLine}>
+                  <span>Seller Brok Total</span>
+                  <span style={brMoney}>Rs. {sellerTotal.toFixed(2)}</span>
+                </div>
+
+                <div style={totalLine}>
+                  <span>Buyer Brok Total</span>
+                  <span style={brMoney}>Rs. {buyerTotal.toFixed(2)}</span>
+                </div>
+
+                <div style={grandRow}>
+                  <div style={grandPill}>
+                    <span style={{ fontWeight: 900 }}>Grand Total</span>
+                    <span style={brMoney}>Rs. {grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

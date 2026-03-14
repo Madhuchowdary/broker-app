@@ -305,7 +305,7 @@ async function sendWhatsApp(who: "seller" | "buyer") {
         </div>
 
         <div style={grid}>
-          {["Name", "Address", "City, State", "GST No", "Phone", "TIN No", "FSSAI No"].map((lbl, i) => (
+          {["Name", "Address", "GST No", "Phone", "FSSAI No"].map((lbl, i) => (
             <React.Fragment key={lbl}>
               <div style={leftLbl}>{lbl}</div>
               <div style={leftVal}>
