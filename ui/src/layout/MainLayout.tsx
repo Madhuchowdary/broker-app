@@ -309,7 +309,6 @@ const maintenanceShell: React.CSSProperties = {
 const maintenanceLeft: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
-  background: "#6f7f98", // bluish blank area like screenshot
   padding: 12,
 };
 

@@ -186,11 +186,11 @@ function whatsappLine(who: "seller" | "buyer") {
   // Short “old UI style” text
   if (who === "seller") {
     // Sent to SELLER mobile: “Sold ... to BUYER ...”
-    return `Sold ${qty}${unitQty ? " " + "_" + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} to ${buyerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
+    return `Sold ${qty}${unitQty ? " " + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} to ${buyerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
   }
 
   // Sent to BUYER mobile: “Purchased ... from SELLER ...”
-  return `Purchased ${qty}${unitQty ? " " + "_" + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} from ${sellerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
+  return `Purchased ${qty}${unitQty ? " " + unitQty : ""} ${product} @ Rs.${rate}${unitRate ? "/" + unitRate : ""}${tax ? ", " + tax : ""} from ${sellerName}. Vide Confirmation No: ${confNo}, Date: ${confirmDate}.`;
 }
 
 function buildWhatsAppMessage(who: "seller" | "buyer") {
@@ -305,7 +305,7 @@ async function sendWhatsApp(who: "seller" | "buyer") {
         </div>
 
         <div style={grid}>
-          {["Name", "Address", "City, State", "PIN No", "Phone", "TIN No", "CST No"].map((lbl, i) => (
+          {["Name", "Address", "City, State", "GST No", "Phone", "TIN No", "FSSAI No"].map((lbl, i) => (
             <React.Fragment key={lbl}>
               <div style={leftLbl}>{lbl}</div>
               <div style={leftVal}>
@@ -325,7 +325,7 @@ async function sendWhatsApp(who: "seller" | "buyer") {
             <div style={contactMidYellow}>{seller?.mobile || "-"}</div>
            <div style={contactMsg}>
               {tx?.product
-                ? `Sold ${safe(tx.quantity)} _  ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} to ${safe(buyer?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
+                ? `Sold ${safe(tx.quantity)}  ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} to ${safe(buyer?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
                 : "—"}
             </div>
             <button style={sendBtn} onClick={() => sendWhatsApp("seller")}>Send</button>
@@ -343,7 +343,7 @@ async function sendWhatsApp(who: "seller" | "buyer") {
             <div style={{ ...contactMidYellow, background: "#a6e8ff" }}>{buyer?.mobile || "-"}</div>
             <div style={contactMsgBlue}>
               {tx?.product
-                ? `Purchased ${safe(tx.quantity)}  _ ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} from ${safe(seller?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
+                ? `Purchased ${safe(tx.quantity)}  ${safe(tx.unit_qty)} ${safe(tx.product)} @ Rs.${safe(tx.rate)}/${safe(tx.unit_rate)}, ${safe(tx.tax)} from ${safe(seller?.name)}. Vide Confirmation No: ${safe(tx.id)}, Date: ${safe(tx.confirm_date)}.`
                 : "—"}
             </div>
             <button style={sendBtn} onClick={() => sendWhatsApp("buyer")}>Send</button>

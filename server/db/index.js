@@ -197,5 +197,24 @@ db.exec(`
 `);
 
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS company_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    title TEXT,
+    address TEXT,
+    near TEXT,
+    city_state TEXT,
+    contact_nos TEXT,
+    email TEXT,
+    pan_no TEXT,
+    bank TEXT,
+    ifsc_code TEXT,
+    account_no TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 module.exports = db;

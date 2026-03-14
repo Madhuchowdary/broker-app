@@ -15,6 +15,7 @@ import PaymentTypes from "./pages/PaymentTypes";
 import Flags from "./pages/Flags";
 import TransactionsReport from "./pages/transactions/TransactionsReport";
 import DayWiseReport from "./pages/reports/DayWiseReport";
+import CompanyDetails from "./pages/maintenance/CompanyDetails";
 
 
 
@@ -85,7 +86,7 @@ export default function App() {
           // MAINTENANCE pages (right menu)
           <Route path="/maintenance/backup" element={<P title="Backup" />} />
           <Route path="/maintenance/change-password" element={<P title="Change Password" />} />
-          <Route path="/maintenance/company-details" element={<P title="Company Details" />} />
+          <Route path="/maintenance/company-details" element={<CompanyDetails />} />
           <Route path="/maintenance/sms-email-settings" element={<P title="SMS / e-Mail Settings" />} />
           <Route path="/maintenance/clear-database" element={<P title="Clear Database" />} />
 

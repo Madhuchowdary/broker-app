@@ -751,11 +751,14 @@ export default function TransactionsEntry() {
                     <Row label="Delivery Qty" rowStyle={row} lblStyle={lbl}>
                       <input style={input} value={form.deliveryQty ?? ""} onChange={(e) => set("deliveryQty", e.target.value)} />
                     </Row>
+                    
                     <Row label="Unit (Qty)" rowStyle={row} lblStyle={lbl}>
                       <input
-                        style={input}
+                        style={selectSearch}
+                        list="unitQtyList"
                         value={form.deliveryUnitQty ?? ""}
                         onChange={(e) => set("deliveryUnitQty", e.target.value)}
+                        placeholder="Type to search unit (qty)..."
                       />
                     </Row>
                     <Row label="Amount Rs." rowStyle={row} lblStyle={lbl}>

@@ -1,3 +1,4 @@
+
 import React from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -8,7 +9,6 @@ function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-// Date -> "dd-mm-yy"
 function toDDMMYY(d: Date) {
   const dd = pad2(d.getDate());
   const mm = pad2(d.getMonth() + 1);
@@ -16,7 +16,6 @@ function toDDMMYY(d: Date) {
   return `${dd}-${mm}-${yy}`;
 }
 
-// "dd-mm-yy" or "dd/mm/yy" -> Date | null
 function fromDDMMYY(s: string) {
   const t = (s || "").trim().replaceAll("/", "-");
   const m = t.match(/^(\d{2})-(\d{2})-(\d{2})$/);
@@ -33,12 +32,10 @@ function fromDDMMYY(s: string) {
   return d;
 }
 
-// Date -> "yyyy-mm-dd" (for <input type="date">)
 function toISODate(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-// "yyyy-mm-dd" -> Date
 function fromISODate(s: string) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -57,6 +54,10 @@ function norm(s: any) {
   return (s ?? "").toString().trim().toLowerCase();
 }
 
+function safe(v: any) {
+  return (v ?? "").toString().trim();
+}
+
 function inRangeDDMMYY(value: string, from: string, to: string) {
   const dv = fromDDMMYY(value);
   const df = fromDDMMYY(from);
@@ -72,12 +73,11 @@ function inRangeDDMMYY(value: string, from: string, to: string) {
   return x >= min && x <= max;
 }
 
-// "dd-mm-yy" -> "1-Dec-24" (matches screenshot style)
 function toDMonYY(ddmmyy: string) {
   const d = fromDDMMYY(ddmmyy);
   if (!d) return ddmmyy || "-";
   const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
-  const day = d.getDate(); // no leading zero
+  const day = d.getDate();
   const yy = pad2(d.getFullYear() % 100);
   return `${day}-${mon}-${yy}`;
 }
@@ -90,27 +90,52 @@ async function fetchJson(url: string) {
 
 export default function DayWiseReport() {
   const today = React.useMemo(() => new Date(), []);
+
   const [fromDate, setFromDate] = React.useState(toDDMMYY(today));
   const [toDate, setToDate] = React.useState(toDDMMYY(today));
-
   const [clientName, setClientName] = React.useState("");
   const [itemName, setItemName] = React.useState("");
 
+  const [companies, setCompanies] = React.useState<any[]>([]);
+  const [companyName, setCompanyName] = React.useState("");
+  const [billDate, setBillDate] = React.useState(toDDMMYY(today));
+  const [billNo, setBillNo] = React.useState("");
+
   const [rows, setRows] = React.useState<TxRow[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string>("");
+  const [error, setError] = React.useState("");
 
-  // ✅ only From + To mandatory
-  function validate(): boolean {
-    const f = fromDate.trim();
-    const t = toDate.trim();
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const data = await fetchJson("/api/company-details");
+        if (!alive) return;
+        setCompanies(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load companies", e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-    if (!f || !t) {
-      setError("From and To dates are mandatory.");
-      return false;
-    }
-    if (!fromDDMMYY(f) || !fromDDMMYY(t)) {
-      setError("Invalid date format. Use dd-mm-yy (example: 03-02-26).");
+  const selectedCompany = React.useMemo(() => {
+    const q = norm(companyName);
+    if (!q) return null;
+    return companies.find((c) => norm(c?.name) === q) || null;
+  }, [companies, companyName]);
+
+  const reportMode: "client" | "item" | "day" = clientName.trim()
+    ? "client"
+    : itemName.trim()
+      ? "item"
+      : "day";
+
+  function validate() {
+    if (!fromDDMMYY(fromDate) || !fromDDMMYY(toDate)) {
+      setError("Valid From and To dates are required.");
       return false;
     }
     setError("");
@@ -124,27 +149,22 @@ export default function DayWiseReport() {
     setRows([]);
 
     try {
-      const all = await fetchJson(`/api/transactions`);
+      const all = await fetchJson("/api/transactions");
       const list: TxRow[] = Array.isArray(all) ? all : [];
 
-      const f = fromDate.trim();
-      const t = toDate.trim();
       const cn = norm(clientName);
       const it = norm(itemName);
 
       const filtered = list.filter((r) => {
-        const conf = (r.confirm_date ?? r.confirmDate ?? "").toString().trim();
-        if (!inRangeDDMMYY(conf, f, t)) return false;
+        const conf = safe(r.confirm_date ?? r.confirmDate);
+        if (!inRangeDDMMYY(conf, fromDate, toDate)) return false;
 
-        // if clientName provided => match seller OR buyer
         if (cn) {
           const seller = norm(r.seller);
           const buyer = norm(r.buyer);
-          const clientOk = seller.includes(cn) || buyer.includes(cn);
-          if (!clientOk) return false;
+          if (!seller.includes(cn) && !buyer.includes(cn)) return false;
         }
 
-        // if itemName provided => match product
         if (it) {
           const product = norm(r.product);
           if (!product.includes(it)) return false;
@@ -162,29 +182,214 @@ export default function DayWiseReport() {
     }
   }
 
-  const sellerTotal = React.useMemo(() => {
-    return rows.reduce((sum, r) => sum + toNumber(r.seller_brokerage ?? r.sellerBrokerage), 0);
-  }, [rows]);
+  const sellerTotal = React.useMemo(
+    () => rows.reduce((sum, r) => sum + toNumber(r.seller_brokerage ?? r.sellerBrokerage), 0),
+    [rows]
+  );
 
-  const buyerTotal = React.useMemo(() => {
-    return rows.reduce((sum, r) => sum + toNumber(r.buyer_brokerage ?? r.buyerBrokerage), 0);
-  }, [rows]);
+  const buyerTotal = React.useMemo(
+    () => rows.reduce((sum, r) => sum + toNumber(r.buyer_brokerage ?? r.buyerBrokerage), 0),
+    [rows]
+  );
 
-  const grandTotal = React.useMemo(() => sellerTotal + buyerTotal, [sellerTotal, buyerTotal]);
+  const grandTotal = React.useMemo(() => {
+    if (reportMode !== "client") return sellerTotal + buyerTotal;
 
-  // ✅ Pattern label + title
-  const reportTitle = itemName.trim() ? "ITEM WISE REPORT" : "DAY WISE REPORT";
+    const cn = norm(clientName);
+    return rows.reduce((sum, r) => {
+      const isSeller = norm(r.seller).includes(cn);
+      const isBuyer = norm(r.buyer).includes(cn);
+      if (isSeller) return sum + toNumber(r.seller_brokerage ?? r.sellerBrokerage);
+      if (isBuyer) return sum + toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+      return sum;
+    }, 0);
+  }, [rows, sellerTotal, buyerTotal, reportMode, clientName]);
 
-  // header line like screenshot
+  const reportTitle =
+    reportMode === "client"
+      ? "CLIENT WISE REPORT"
+      : reportMode === "item"
+        ? "ITEM WISE REPORT"
+        : "DAY WISE REPORT";
+
   const headerLine = React.useMemo(() => {
+    if (reportMode === "client") {
+      return `Client : ${clientName.trim() || "ALL"}  Report  From ${toDMonYY(fromDate)} To ${toDMonYY(toDate)}`;
+    }
     const item = itemName.trim() ? itemName.trim().toUpperCase() : "ALL";
     return `Item : ${item}  Report  From ${toDMonYY(fromDate)} To ${toDMonYY(toDate)}`;
-  }, [itemName, fromDate, toDate]);
+  }, [reportMode, itemName, clientName, fromDate, toDate]);
 
-  function buildPdf() {
+  function buildClientWisePdf() {
+    const doc = new jsPDF("p", "pt", "a4");
+    const pageW = doc.internal.pageSize.getWidth();
+
+    const broker = {
+      name: safe(selectedCompany?.name) || "ANIL A SHAH",
+      line1: safe(selectedCompany?.title) || "Edible Oil, Seed and Cake Brokers",
+      addr1: safe(selectedCompany?.address) || "Post Box No. 18, 68/39C, Mahaveer Colony",
+      addr2: safe(selectedCompany?.near) || "Near Urban Bank",
+      city: safe(selectedCompany?.city_state) || "Kurnool - ( A.P ) - 518001",
+      pan: safe(selectedCompany?.pan_no) || "ATUPS6245G",
+      bank: safe(selectedCompany?.bank) || "Union Bank of India (Kurnool)",
+      ifsc: safe(selectedCompany?.ifsc_code) || "UBIN0803201",
+      acNo: safe(selectedCompany?.account_no) || "0320100299000000",
+      contact: safe(selectedCompany?.contact_nos),
+      email: safe(selectedCompany?.email),
+    };
+
+    const clientLabel = clientName.trim() || "CLIENT";
+    const firstRow = rows[0] || {};
+    const itemLabel = safe(firstRow?.product).toUpperCase() || "ITEM";
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(20);
+    doc.text(broker.name, 45, 55);
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(11);
+    doc.text(broker.line1, 45, 76);
+    doc.text(broker.addr1, 45, 94);
+    doc.text(broker.addr2, 45, 112);
+    doc.text(broker.city, 45, 130);
+
+    doc.text(`PAN No : ${broker.pan}`, pageW - 210, 55);
+    doc.text(broker.bank, pageW - 210, 74);
+    doc.text(`IFSC Code   ${broker.ifsc}`, pageW - 210, 92);
+    doc.text(`A/c No   ${broker.acNo}`, pageW - 210, 110);
+
+    doc.roundedRect(40, 150, pageW - 80, 90, 8, 8);
+    doc.setFont("times", "bold");
+    doc.text(clientLabel.toUpperCase(), 50, 175);
+
+    doc.setFont("times", "normal");
+    if (broker.contact) doc.text(`Contact  ${broker.contact}`, 50, 195);
+    if (broker.email) doc.text(`e-Mail  ${broker.email}`, 50, 214);
+
+    doc.roundedRect(pageW - 255, 170, 200, 55, 10, 10);
+    doc.setFont("times", "bold");
+    doc.text(`Bill No : ${billNo || "-"}`, pageW - 215, 192);
+    doc.text(`Date : ${billDate || "-"}`, pageW - 215, 212);
+
+    const head = [[
+      "Confirm\nDate",
+      "Seller / Buyer",
+      "Price\nRs.",
+      "Qty",
+      "Qty\nUnit",
+      "Delivery\nDate",
+      "Tanker No",
+      "Bill No",
+      "Brokerage\nRs."
+    ]];
+
+    const cn = norm(clientName);
+    const body = rows.map((r) => {
+      const isSeller = norm(r.seller).includes(cn);
+      const brokerage = isSeller
+        ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
+        : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+
+      const oppositeParty = isSeller ? safe(r.buyer || "-") : safe(r.seller || "-");
+
+      return [
+        safe(r.confirm_date ?? r.confirmDate ?? "-"),
+        oppositeParty,
+        safe(r.rate || "-"),
+        safe(r.quantity || "-"),
+        safe(r.unit_qty ?? r.unitQty ?? "-"),
+        safe(r.delivery_date ?? r.deliveryDate ?? "-"),
+        safe(r.tanker_no ?? r.tankerNo ?? "-"),
+        safe(r.bill_no ?? r.billNo ?? "-"),
+        money(brokerage),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 255,
+      margin: { left: 40, right: 40 },
+      tableWidth: pageW - 80,
+      head,
+      body: body.length
+        ? [
+            [
+              {
+                content: itemLabel,
+                colSpan: 2,
+                styles: { fontStyle: "bold", halign: "left" },
+              },
+              {
+                content: `Brokerage Bill From ${fromDate} To ${toDate}`,
+                colSpan: 7,
+                styles: { halign: "center" },
+              },
+            ],
+            ...body,
+            [
+              {
+                content: `${itemLabel}   Total Amount`,
+                colSpan: 8,
+                styles: { halign: "right", fontStyle: "italic" },
+              },
+              {
+                content: money(grandTotal),
+                styles: { halign: "right", fontStyle: "bold" },
+              },
+            ],
+            [
+              {
+                content: "Grand Total",
+                colSpan: 8,
+                styles: { halign: "right", fontStyle: "bold" },
+              },
+              {
+                content: money(grandTotal),
+                styles: { halign: "right", fontStyle: "bold" },
+              },
+            ],
+          ]
+        : [],
+      theme: "grid",
+      styles: {
+        font: "times",
+        fontSize: 8,
+        cellPadding: 3,
+        lineColor: [80, 80, 80],
+        lineWidth: 0.8,
+        overflow: "linebreak",
+        valign: "middle",
+      },
+      headStyles: {
+        fontStyle: "bold",
+        halign: "center",
+        valign: "middle",
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+      },
+      columnStyles: {
+        0: { cellWidth: 52 },
+        1: { cellWidth: 100 },
+        2: { cellWidth: 50, halign: "right" },
+        3: { cellWidth: 40, halign: "right" },
+        4: { cellWidth: 48, halign: "center" },
+        5: { cellWidth: 62, halign: "center" },
+        6: { cellWidth: 68 },
+        7: { cellWidth: 58 },
+        8: { cellWidth: 60, halign: "right" },
+      },
+    });
+
+    const lastY = (doc as any).lastAutoTable?.finalY ?? 520;
+    doc.setFont("times", "bolditalic");
+    doc.setFontSize(18);
+    doc.text(`For ${broker.name}`, pageW - 210, lastY + 45);
+
+    doc.save("client-wise-report.pdf");
+  }
+
+  function buildDayOrItemPdf() {
     const doc = new jsPDF("p", "pt", "a4");
 
-    // Title box
     doc.setFont("times", "bold");
     doc.setFontSize(14);
     const titleW = doc.getTextWidth(reportTitle) + 24;
@@ -192,21 +397,19 @@ export default function DayWiseReport() {
     doc.rect(x, 36, titleW, 22);
     doc.text(reportTitle, x + 12, 52);
 
-    // Header line
     doc.setFont("times", "normal");
     doc.setFontSize(11);
     doc.text(headerLine, 40, 82);
 
-    // Table data
     const body = rows.map((r) => {
-      const conf = (r.confirm_date ?? r.confirmDate ?? "-").toString();
-      const seller = (r.seller ?? "-").toString();
+      const conf = safe(r.confirm_date ?? r.confirmDate ?? "-");
+      const seller = safe(r.seller ?? "-");
       const sb = money(toNumber(r.seller_brokerage ?? r.sellerBrokerage));
-      const buyer = (r.buyer ?? "-").toString();
+      const buyer = safe(r.buyer ?? "-");
       const bb = money(toNumber(r.buyer_brokerage ?? r.buyerBrokerage));
-      const item = (r.product ?? "-").toString();
-      const qty = (r.quantity ?? "-").toString();
-      const price = (r.rate ?? "-").toString();
+      const item = safe(r.product ?? "-");
+      const qty = safe(r.quantity ?? "-");
+      const price = safe(r.rate ?? "-");
       return [toDMonYY(conf), seller, sb, buyer, bb, item, qty, price];
     });
 
@@ -237,14 +440,12 @@ export default function DayWiseReport() {
 
     const lastY = (doc as any).lastAutoTable?.finalY ?? 96;
 
-    // Totals area like screenshot
     doc.setFont("times", "bold");
     doc.setFontSize(11);
 
     doc.text(`Seller Brok Total : Rs  ${money(sellerTotal)}`, 120, lastY + 34);
-    doc.text(`  Buyer Brok Total : Rs  ${money(buyerTotal)}`, 330, lastY + 34);
+    doc.text(`Buyer Brok Total : Rs  ${money(buyerTotal)}`, 330, lastY + 34);
 
-    // Grand total rounded rectangle centered
     const gt = `Grand Total   Rs   ${money(grandTotal)}`;
     const gtW = doc.getTextWidth(gt) + 80;
     const gx = (doc.internal.pageSize.getWidth() - gtW) / 2;
@@ -255,12 +456,19 @@ export default function DayWiseReport() {
     doc.save(`${reportTitle.replaceAll(" ", "-").toLowerCase()}.pdf`);
   }
 
-  // typing + picker both work (important: hidden picker should not block typing)
+  function buildPdf() {
+    if (reportMode === "client") {
+      buildClientWisePdf();
+      return;
+    }
+    buildDayOrItemPdf();
+  }
+
   const datePickerHidden: React.CSSProperties = {
     position: "absolute",
     right: 0,
     top: 0,
-    width: 28, // ✅ only on calendar icon side
+    width: 28,
     height: 24,
     opacity: 0,
     cursor: "pointer",
@@ -330,6 +538,46 @@ export default function DayWiseReport() {
             />
           </div>
 
+          <div style={reportDetailsBox}>
+            <div style={reportDetailsTitle}>Report Details</div>
+
+            <div style={reportDetailsGrid}>
+              <div style={reportLbl}>Company</div>
+              <input
+                style={reportInput}
+                list="companyList"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Type to search company..."
+              />
+
+              <div style={reportLbl}>Bill Date</div>
+              <div style={dateBoxSmall}>
+                <input
+                  style={dateInputSmall}
+                  value={billDate}
+                  onChange={(e) => setBillDate(e.target.value)}
+                  placeholder="dd-mm-yy"
+                />
+                <div style={calBtn}>📅</div>
+                <input
+                  type="date"
+                  style={datePickerHiddenSmall}
+                  value={toISODate(fromDDMMYY(billDate) || new Date())}
+                  onChange={(e) => setBillDate(toDDMMYY(fromISODate(e.target.value)))}
+                />
+              </div>
+
+              <div style={reportLbl}>Bill No</div>
+              <input
+                style={reportInputSmall}
+                value={billNo}
+                onChange={(e) => setBillNo(e.target.value)}
+                placeholder="Bill No"
+              />
+            </div>
+          </div>
+
           <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "center", gap: 12, marginTop: 8 }}>
             <button style={btnPrimary} onClick={showReport} disabled={loading}>
               {loading ? "Loading..." : "Show Report"}
@@ -343,9 +591,14 @@ export default function DayWiseReport() {
             <div style={{ gridColumn: "1 / -1", color: "#b91c1c", marginTop: 6, textAlign: "center" }}>{error}</div>
           ) : null}
         </div>
+
+        <datalist id="companyList">
+          {companies.map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+        </datalist>
       </div>
 
-      {/* Report preview (pattern like screenshot) */}
       <div style={reportWrap}>
         <div style={paper}>
           <div style={boxTitleRow}>
@@ -377,7 +630,7 @@ export default function DayWiseReport() {
                   </tr>
                 ) : (
                   rows.map((r, idx) => {
-                    const conf = (r.confirm_date ?? r.confirmDate ?? "-").toString();
+                    const conf = safe(r.confirm_date ?? r.confirmDate ?? "-");
                     return (
                       <tr key={r.id ?? idx}>
                         <td style={td}>{toDMonYY(conf)}</td>
@@ -542,7 +795,6 @@ const td: React.CSSProperties = {
   verticalAlign: "top",
 };
 
-
 const totalsGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
@@ -570,7 +822,7 @@ const grandRow: React.CSSProperties = {
 };
 
 const grandPill: React.CSSProperties = {
-  minWidth: 400,
+  minWidth: 420,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
@@ -587,6 +839,72 @@ const brMoney: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
+const reportDetailsBox: React.CSSProperties = {
+  marginTop: 10,
+  background: "#eef6fb",
+  border: "1px solid #d9e6ef",
+  borderRadius: 4,
+  padding: "10px 14px 14px",
+  width: 520,
+  marginLeft: "auto",
+  marginRight: "auto",
+  gridColumn: "1 / -1",
+};
 
+const reportDetailsTitle: React.CSSProperties = {
+  color: "#7c8aa0",
+  fontSize: 13,
+  marginBottom: 10,
+};
 
-const amt: React.CSSProperties = { display: "inline-block", minWidth: 90, textAlign: "right" }; 
+const reportDetailsGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "90px 1fr",
+  gap: 10,
+  alignItems: "center",
+};
+
+const reportLbl: React.CSSProperties = {
+  color: "#5b677a",
+  fontSize: 14,
+};
+
+const reportInput: React.CSSProperties = {
+  height: 28,
+  border: "1px solid #d5dce5",
+  background: "#fff",
+  padding: "0 8px",
+  fontSize: 14,
+};
+
+const reportInputSmall: React.CSSProperties = {
+  ...reportInput,
+  width: 160,
+};
+
+const dateBoxSmall: React.CSSProperties = {
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  width: 170,
+};
+
+const dateInputSmall: React.CSSProperties = {
+  width: "100%",
+  height: 28,
+  border: "1px solid #d5dce5",
+  background: "#fff",
+  padding: "0 8px",
+  fontSize: 14,
+};
+
+const datePickerHiddenSmall: React.CSSProperties = {
+  position: "absolute",
+  right: 0,
+  top: 0,
+  width: 28,
+  height: 28,
+  opacity: 0,
+  cursor: "pointer",
+};
