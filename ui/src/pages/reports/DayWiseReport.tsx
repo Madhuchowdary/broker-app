@@ -99,6 +99,43 @@ async function fetchClientByName(name: string) {
   return exact || data[0];
 }
 
+function groupClientRowsByProduct(list: any[], clientName: string) {
+  const cn = norm(clientName);
+
+  const sorted = [...list].sort((a, b) => {
+    const pa = safe(a.product).toLowerCase();
+    const pb = safe(b.product).toLowerCase();
+    if (pa !== pb) return pa.localeCompare(pb);
+
+    const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+    const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+    if (da !== db) return da - db;
+
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
+
+  const groups: { product: string; rows: any[]; total: number }[] = [];
+
+  sorted.forEach((r) => {
+    const product = safe(r.product || "ITEM").toUpperCase();
+    const isSeller = norm(r.seller).includes(cn);
+    const brokerage = isSeller
+      ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
+      : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+
+    let grp = groups.find((g) => g.product === product);
+    if (!grp) {
+      grp = { product, rows: [], total: 0 };
+      groups.push(grp);
+    }
+
+    grp.rows.push(r);
+    grp.total += brokerage;
+  });
+
+  return groups;
+}
+
 export default function DayWiseReport() {
   const today = React.useMemo(() => new Date(), []);
 
@@ -116,6 +153,8 @@ export default function DayWiseReport() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [selectedClient, setSelectedClient] = React.useState<any | null>(null);
+  const [clients, setClients] = React.useState<any[]>([]);
+  const [items, setItems] = React.useState<any[]>([]);
 
   React.useEffect(() => {
     let alive = true;
@@ -128,6 +167,30 @@ export default function DayWiseReport() {
         console.error("Failed to load companies", e);
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+   React.useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const [clientData, itemData] = await Promise.all([
+          fetchJson("/api/clients"),
+          fetchJson("/api/item-types"),
+        ]);
+
+        if (!alive) return;
+
+        setClients(Array.isArray(clientData) ? clientData : []);
+        setItems(Array.isArray(itemData) ? itemData : []);
+      } catch (e) {
+        console.error("Failed to load clients/items", e);
+      }
+    })();
+
     return () => {
       alive = false;
     };
@@ -155,10 +218,12 @@ export default function DayWiseReport() {
   }
 
   async function showReport() {
+    console.log(1)
     if (!validate()) return;
-
+    console.log(2)
     setLoading(true);
     setRows([]);
+    setError("");
 
     try {
       const [all, clientRec] = await Promise.all([
@@ -176,32 +241,40 @@ export default function DayWiseReport() {
         const conf = safe(r.confirm_date ?? r.confirmDate);
         if (!inRangeDDMMYY(conf, fromDate, toDate)) return false;
 
+        const seller = norm(r.seller);
+        const buyer = norm(r.buyer);
+        const product = norm(r.product);
+        const status = norm(r.status);
+
+        // client filter
         if (cn) {
-          const seller = norm(r.seller);
-          const buyer = norm(r.buyer);
-          if (!seller.includes(cn) && !buyer.includes(cn)) return false;
+          const clientOk = seller.includes(cn) || buyer.includes(cn);
+          if (!clientOk) return false;
         }
 
+        // item filter
         if (it) {
-          const product = norm(r.product);
           if (!product.includes(it)) return false;
+        }
+
+        // client-wise report should exclude undelivered rows
+        if (reportMode === "client" && status === "undelivered") {
+          return false;
         }
 
         return true;
       });
 
+      // old first, latest last
       filtered.sort((a, b) => {
-      const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
-      const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+        const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+        const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
 
-      // oldest first
-      if (da !== db) return da - db;
+        if (da !== db) return da - db;
+        return Number(a.id ?? 0) - Number(b.id ?? 0);
+      });
 
-      // if same date, smaller id first
-      return Number(a.id ?? 0) - Number(b.id ?? 0);
-    });
-
-    setRows(filtered);
+      setRows(filtered);
     } catch (e) {
       console.error(e);
       setError("Failed to load transactions. Check API / server logs.");
@@ -248,89 +321,174 @@ export default function DayWiseReport() {
     return `Item : ${item}  Report  From ${toDMonYY(fromDate)} To ${toDMonYY(toDate)}`;
   }, [reportMode, itemName, clientName, fromDate, toDate]);
 
-  function buildClientWisePdf(sortedRows) {
+  function buildClientWisePdf() {
     const doc = new jsPDF("p", "pt", "a4");
     const pageW = doc.internal.pageSize.getWidth();
 
+    const sortedRows = [...rows].sort((a, b) => {
+      const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+      const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+      if (da !== db) return da - db; // old first
+      return Number(a.id ?? 0) - Number(b.id ?? 0);
+    });
+
     const broker = {
-      name: safe(selectedCompany?.name) || "",
+      name: safe(selectedCompany?.name) || "ANIL A SHAH",
       line1: safe(selectedCompany?.title) || "",
       addr1: safe(selectedCompany?.address) || "",
       addr2: safe(selectedCompany?.near) || "",
       city: safe(selectedCompany?.city_state) || "",
       pan: safe(selectedCompany?.pan_no) || "",
-      bank: safe(selectedCompany?.bank) || "U",
+      bank: safe(selectedCompany?.bank) || "",
       ifsc: safe(selectedCompany?.ifsc_code) || "",
       acNo: safe(selectedCompany?.account_no) || "",
-      contact: safe(selectedCompany?.contact_nos),
-      email: safe(selectedCompany?.email),
     };
 
     const clientLabel = clientName.trim() || "CLIENT";
-    const firstRow = rows[0] || {};
-    const itemLabel = safe(firstRow?.product).toUpperCase() || "ITEM";
+    const groupedProducts = groupClientRowsByProduct(sortedRows, clientName);
 
+    function drawWrapped(text: string, x: number, y: number, maxWidth: number, lineGap = 15) {
+      if (!text) return y;
+      const wrapped = doc.splitTextToSize(text, maxWidth);
+      doc.text(wrapped, x, y);
+      return y + wrapped.length * lineGap;
+    }
+
+    // ---------- company block ----------
     doc.setFont("times", "bold");
     doc.setFontSize(20);
     doc.text(broker.name, 45, 55);
 
     doc.setFont("times", "normal");
     doc.setFontSize(11);
-    let YVal = 76;
-    const maxWidth = 240; // width allowed for address block
 
-    const lines = [
-      broker.line1,
-      broker.addr1,
-      broker.addr2,
-      broker.city
-    ];
+    let companyY = 76;
+    const companyMaxWidth = 250;
 
-    lines.forEach((text) => {
-      if (!text) return;
+    companyY = drawWrapped(broker.line1, 45, companyY, companyMaxWidth);
+    companyY = drawWrapped(broker.addr1, 45, companyY, companyMaxWidth);
+    companyY = drawWrapped(broker.addr2, 45, companyY, companyMaxWidth);
+    companyY = drawWrapped(broker.city, 45, companyY, companyMaxWidth);
 
-      const wrapped = doc.splitTextToSize(text, maxWidth);
-      doc.text(wrapped, 45, YVal);
-      YVal += wrapped.length * 16; // move down depending on wrapped lines
-    });
+    doc.text(`PAN No : ${broker.pan || "-"}`, pageW - 210, 55);
+    doc.text(broker.bank || "-", pageW - 210, 74);
+    doc.text(`IFSC Code   ${broker.ifsc || "-"}`, pageW - 210, 92);
+    doc.text(`A/c No   ${broker.acNo || "-"}`, pageW - 210, 110);
 
-    doc.text(`PAN No : ${broker.pan}`, pageW - 210, 55);
-    doc.text(broker.bank, pageW - 210, 74);
-    doc.text(`IFSC Code   ${broker.ifsc}`, pageW - 210, 92);
-    doc.text(`A/c No   ${broker.acNo}`, pageW - 210, 110);
+    // ---------- client block ----------
+    const clientBoxX = 40;
+    const clientBoxY = 150;
+    const clientBoxW = pageW - 80;
+    const clientBoxH = 118;
 
-    doc.roundedRect(40, 150, pageW - 80, 90, 8, 8);
+    doc.roundedRect(clientBoxX, clientBoxY, clientBoxW, clientBoxH, 8, 8);
+
     doc.setFont("times", "bold");
+    doc.setFontSize(14);
     doc.text((safe(selectedClient?.name) || clientLabel).toUpperCase(), 50, 175);
 
     doc.setFont("times", "normal");
+    doc.setFontSize(11);
 
     const clientAddress = safe(selectedClient?.address);
     const clientCity = safe(selectedClient?.city_state ?? selectedClient?.cityState);
     const clientPin = safe(selectedClient?.pin_no ?? selectedClient?.pinNo);
     const clientMobile = safe(selectedClient?.mobile);
+    const clientEmail = safe(selectedClient?.email);
 
-    let y = 195;
-    if (clientAddress) {
-      doc.text(clientAddress, 50, y);
-      y += 19;
-    }
-    if (clientCity) {
-      doc.text(clientCity, 50, y);
-      y += 19;
-    }
+    let clientY = 195;
+    const clientMaxWidth = 250;
+
+    clientY = drawWrapped(clientAddress, 50, clientY, clientMaxWidth);
+    clientY = drawWrapped(clientCity, 50, clientY, clientMaxWidth);
+
     if (clientPin) {
-      doc.text(`PIN  ${clientPin}`, 50, y);
-      y += 19;
-    }
-    if (clientMobile) {
-      doc.text(`Mobile  ${clientMobile}`, 50, y);
+      clientY = drawWrapped(`PIN  ${clientPin}`, 50, clientY, clientMaxWidth);
     }
 
-    doc.roundedRect(pageW - 255, 170, 200, 55, 10, 10);
+    if (clientMobile) {
+      clientY = drawWrapped(`Mobile  ${clientMobile}`, 50, clientY, clientMaxWidth);
+    }
+
+    if (clientEmail) {
+      clientY = drawWrapped(`e-Mail  ${clientEmail}`, 50, clientY, clientMaxWidth);
+    }
+
+    // ---------- bill box ----------
+    const billBoxX = pageW - 255;
+    const billBoxY = 175;
+    const billBoxW = 200;
+    const billBoxH = 55;
+
+    doc.roundedRect(billBoxX, billBoxY, billBoxW, billBoxH, 10, 10);
     doc.setFont("times", "bold");
-    doc.text(`Bill No : ${billNo || "-"}`, pageW - 215, 192);
-    doc.text(`Date : ${billDate || "-"}`, pageW - 215, 212);
+    doc.setFontSize(13);
+    doc.text(`Bill No : ${billNo || "-"}`, billBoxX + 25, billBoxY + 22);
+    doc.text(`Date : ${billDate || "-"}`, billBoxX + 25, billBoxY + 42);
+
+    // ---------- grouped body ----------
+    const cn = norm(clientName);
+    const body: any[] = [];
+
+    groupedProducts.forEach((group) => {
+      body.push([
+        {
+          content: group.product,
+          colSpan: 2,
+          styles: { fontStyle: "bold", halign: "left" },
+        },
+        {
+          content: `Brokerage Bill From ${fromDate} To ${toDate}`,
+          colSpan: 7,
+          styles: { halign: "center" },
+        },
+      ]);
+
+      group.rows.forEach((r) => {
+        const isSeller = norm(r.seller).includes(cn);
+        const brokerage = isSeller
+          ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
+          : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+
+        const oppositeParty = isSeller ? safe(r.buyer || "-") : safe(r.seller || "-");
+
+        body.push([
+          safe(r.confirm_date ?? r.confirmDate ?? "-"),
+          oppositeParty,
+          safe(r.rate || "-"),
+          safe(r.quantity || "-"),
+          safe(r.unit_qty ?? r.unitQty ?? "-"),
+          safe(r.delivery_date ?? r.deliveryDate ?? "-"),
+          safe(r.tanker_no ?? r.tankerNo ?? "-"),
+          safe(r.bill_no ?? r.billNo ?? "-"),
+          money(brokerage),
+        ]);
+      });
+
+      body.push([
+        {
+          content: `${group.product}   Total Amount`,
+          colSpan: 8,
+          styles: { halign: "right", fontStyle: "italic" },
+        },
+        {
+          content: money(group.total),
+          styles: { halign: "right", fontStyle: "bold" },
+        },
+      ]);
+    });
+
+    body.push([
+      {
+        content: "Grand Total",
+        colSpan: 8,
+        styles: { halign: "right", fontStyle: "bold" },
+      },
+      {
+        content: money(grandTotal),
+        styles: { halign: "right", fontStyle: "bold" },
+      },
+    ]);
 
     const head = [[
       "Confirm\nDate",
@@ -344,81 +502,25 @@ export default function DayWiseReport() {
       "Brokerage\nRs."
     ]];
 
-    const cn = norm(clientName);
-    const body = sortedRows.map((r) => {
-      const isSeller = norm(r.seller).includes(cn);
-      const brokerage = isSeller
-        ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
-        : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
-
-      const oppositeParty = isSeller ? safe(r.buyer || "-") : safe(r.seller || "-");
-
-      return [
-        safe(r.confirm_date ?? r.confirmDate ?? "-"),
-        oppositeParty,
-        safe(r.rate || "-"),
-        safe(r.quantity || "-"),
-        safe(r.unit_qty ?? r.unitQty ?? "-"),
-        safe(r.delivery_date ?? r.deliveryDate ?? "-"),
-        safe(r.tanker_no ?? r.tankerNo ?? "-"),
-        safe(r.bill_no ?? r.billNo ?? "-"),
-        money(brokerage),
-      ];
-    });
+    // table starts after client block
+    const tableStartY = clientBoxY + clientBoxH + 12;
 
     autoTable(doc, {
-      startY: 255,
+      startY: tableStartY,
       margin: { left: 40, right: 40 },
       tableWidth: pageW - 80,
       head,
-      body: body.length
-        ? [
-            [
-              {
-                content: itemLabel,
-                colSpan: 2,
-                styles: { fontStyle: "bold", halign: "left" },
-              },
-              {
-                content: `Brokerage Bill From ${fromDate} To ${toDate}`,
-                colSpan: 7,
-                styles: { halign: "center" },
-              },
-            ],
-            ...body,
-            [
-              {
-                content: `${itemLabel}   Total Amount`,
-                colSpan: 8,
-                styles: { halign: "right", fontStyle: "italic" },
-              },
-              {
-                content: money(grandTotal),
-                styles: { halign: "right", fontStyle: "bold" },
-              },
-            ],
-            [
-              {
-                content: "Grand Total",
-                colSpan: 8,
-                styles: { halign: "right", fontStyle: "bold" },
-              },
-              {
-                content: money(grandTotal),
-                styles: { halign: "right", fontStyle: "bold" },
-              },
-            ],
-          ]
-        : [],
+      body,
       theme: "grid",
       styles: {
         font: "times",
-        fontSize: 8,
+        fontSize: 8.5,
         cellPadding: 3,
         lineColor: [80, 80, 80],
         lineWidth: 0.8,
         overflow: "linebreak",
         valign: "middle",
+        textColor: [0, 0, 0],
       },
       headStyles: {
         fontStyle: "bold",
@@ -427,28 +529,32 @@ export default function DayWiseReport() {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
       },
+      bodyStyles: {
+        textColor: [0, 0, 0],
+      },
       columnStyles: {
-        0: { cellWidth: 52 },
-        1: { cellWidth: 100 },
+        0: { cellWidth: 52, halign: "center" },
+        1: { cellWidth: 104 },
         2: { cellWidth: 50, halign: "right" },
         3: { cellWidth: 40, halign: "right" },
         4: { cellWidth: 48, halign: "center" },
-        5: { cellWidth: 62, halign: "center" },
-        6: { cellWidth: 68 },
+        5: { cellWidth: 64, halign: "center" },
+        6: { cellWidth: 70 },
         7: { cellWidth: 58 },
-        8: { cellWidth: 60, halign: "right" },
+        8: { cellWidth: 62, halign: "right" },
       },
     });
 
     const lastY = (doc as any).lastAutoTable?.finalY ?? 520;
+
     doc.setFont("times", "bolditalic");
     doc.setFontSize(18);
-    doc.text(`For ${broker.name}`, pageW - 210, lastY + 45);
+    doc.text(`For ${broker.name}`, pageW - 220, lastY + 42);
 
     doc.save("client-wise-report.pdf");
   }
 
-  function buildDayOrItemPdf(sortedRows) {
+  function buildDayOrItemPdf() {
     const doc = new jsPDF("p", "pt", "a4");
 
     doc.setFont("times", "bold");
@@ -526,10 +632,10 @@ export default function DayWiseReport() {
       return Number(a.id ?? 0) - Number(b.id ?? 0);
     });
     if (reportMode === "client") {
-      buildClientWisePdf(sortedRows);
+      buildClientWisePdf();
       return;
     }
-    buildDayOrItemPdf(sortedRows);
+    buildDayOrItemPdf();
   }
 
   const datePickerHidden: React.CSSProperties = {
@@ -585,26 +691,27 @@ export default function DayWiseReport() {
               />
             </div>
           </div>
-
           <div style={{ gridColumn: "1 / -1" }}>
             <div style={lbl}>Client Name</div>
             <input
               style={textInput}
+              list="clientList"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="(optional) type client name to filter seller/buyer"
+              placeholder="Type to search client..."
             />
           </div>
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <div style={lbl}>Item Name</div>
-            <input
-              style={textInput}
-              value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
-              placeholder="(optional) type item name to filter product"
-            />
-          </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={lbl}>Item Name</div>
+              <input
+                style={textInput}
+                list="itemList"
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                placeholder="Type to search item..."
+              />
+            </div>
 
           <div style={reportDetailsBox}>
             <div style={reportDetailsTitle}>Report Details</div>
@@ -665,7 +772,19 @@ export default function DayWiseReport() {
             <option key={c.id} value={c.name} />
           ))}
         </datalist>
-      </div>
+
+        <datalist id="clientList">
+          {clients.map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+        </datalist>
+
+        <datalist id="itemList">
+          {items.map((it) => (
+            <option key={it.id} value={it.name} />
+          ))}
+        </datalist>
+              </div>
 
       {/* Report preview */}
       <div style={reportWrap}>
@@ -703,49 +822,53 @@ export default function DayWiseReport() {
                       </tr>
                     ) : (
                       <>
-                        <tr>
-                          <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
-                            {safe(rows[0]?.product).toUpperCase() || "ITEM"}
-                          </td>
-                          <td style={{ ...td, textAlign: "center" }} colSpan={7}>
-                            Brokerage Bill From {fromDate} To {toDate}
-                          </td>
-                        </tr>
-
-                        {rows.map((r, idx) => {
-                          const cn = norm(clientName);
-                          const isSeller = norm(r.seller).includes(cn);
-                          const brokerage = isSeller
-                            ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
-                            : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
-
-                          const oppositeParty = isSeller
-                            ? safe(r.buyer || "-")
-                            : safe(r.seller || "-");
-
-                          return (
-                            <tr key={r.id ?? idx}>
-                              <td style={td}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
-                              <td style={td}>{oppositeParty}</td>
-                              <td style={{ ...td, textAlign: "right" }}>{safe(r.rate || "-")}</td>
-                              <td style={{ ...td, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
-                              <td style={td}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
-                              <td style={td}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
-                              <td style={td}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
-                              <td style={td}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
-                              <td style={{ ...td, textAlign: "right" }}>{money(brokerage)}</td>
+                        {groupClientRowsByProduct(rows, clientName).map((group, gi) => (
+                          <React.Fragment key={`${group.product}-${gi}`}>
+                            <tr>
+                              <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
+                                {group.product}
+                              </td>
+                              <td style={{ ...td, textAlign: "center" }} colSpan={7}>
+                                Brokerage Bill From {fromDate} To {toDate}
+                              </td>
                             </tr>
-                          );
-                        })}
 
-                        <tr>
-                          <td style={{ ...td, textAlign: "right", fontStyle: "italic" }} colSpan={8}>
-                            {(safe(rows[0]?.product).toUpperCase() || "ITEM")} Total Amount
-                          </td>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
-                            {money(grandTotal)}
-                          </td>
-                        </tr>
+                            {group.rows.map((r, idx) => {
+                              const cn = norm(clientName);
+                              const isSeller = norm(r.seller).includes(cn);
+                              const brokerage = isSeller
+                                ? toNumber(r.seller_brokerage ?? r.sellerBrokerage)
+                                : toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+
+                              const oppositeParty = isSeller
+                                ? safe(r.buyer || "-")
+                                : safe(r.seller || "-");
+
+                              return (
+                                <tr key={`${group.product}-${r.id ?? idx}`}>
+                                  <td style={td}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
+                                  <td style={td}>{oppositeParty}</td>
+                                  <td style={{ ...td, textAlign: "right" }}>{safe(r.rate || "-")}</td>
+                                  <td style={{ ...td, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
+                                  <td style={td}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
+                                  <td style={td}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
+                                  <td style={td}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
+                                  <td style={td}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
+                                  <td style={{ ...td, textAlign: "right" }}>{money(brokerage)}</td>
+                                </tr>
+                              );
+                            })}
+
+                            <tr>
+                              <td style={{ ...td, textAlign: "right", fontStyle: "italic" }} colSpan={8}>
+                                {group.product} Total Amount
+                              </td>
+                              <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
+                                {money(group.total)}
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        ))}
 
                         <tr>
                           <td style={{ ...td, textAlign: "right", fontWeight: 700 }} colSpan={8}>

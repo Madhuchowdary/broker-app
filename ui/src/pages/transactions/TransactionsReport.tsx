@@ -309,7 +309,7 @@ async function sendWhatsApp(who: "seller" | "buyer") {
             <React.Fragment key={lbl}>
               <div style={leftLbl}>{lbl}</div>
               <div style={leftVal}>
-                {i === 0 ? seller?.name : i === 1 ? seller?.address : i === 2 ? seller?.cityState : i === 3 ? seller?.pinNo : i === 4 ? seller?.phone : i === 5 ? seller?.gstNo : seller?.gstNo}
+                {i === 0 ? seller?.name : i === 1 ? seller?.address : i === 2 ?  seller?.pinNo : i === 4 ? seller?.phone : i === 5 ? seller?.gstNo : seller?.gstNo}
               </div>
               <div style={rightVal}>
                 {i === 0 ? buyer?.name : i === 1 ? buyer?.address : i === 2 ? buyer?.cityState : i === 3 ? buyer?.pinNo : i === 4 ? buyer?.phone : i === 5 ? buyer?.gstNo : buyer?.gstNo}
