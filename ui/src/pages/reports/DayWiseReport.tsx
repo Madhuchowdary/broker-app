@@ -321,6 +321,35 @@ export default function DayWiseReport() {
     return `Item : ${item}  Report  From ${toDMonYY(fromDate)} To ${toDMonYY(toDate)}`;
   }, [reportMode, itemName, clientName, fromDate, toDate]);
 
+  const sortedPreviewRows = React.useMemo(() => {
+  return [...rows].sort((a, b) => {
+    const da = fromDDMMYY((a.confirm_date ?? a.confirmDate ?? "").toString())?.getTime() ?? 0;
+    const db = fromDDMMYY((b.confirm_date ?? b.confirmDate ?? "").toString())?.getTime() ?? 0;
+    if (da !== db) return da - db; // old first
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
+}, [rows]);
+
+const clientPreviewGroups = React.useMemo(() => {
+  return reportMode === "client"
+    ? groupClientRowsByProduct(sortedPreviewRows, clientName)
+    : [];
+}, [reportMode, sortedPreviewRows, clientName]);
+
+const previewCompany = React.useMemo(() => {
+  return {
+    name: safe(selectedCompany?.name) || "ANIL A SHAH",
+    line1: safe(selectedCompany?.title) || "",
+    addr1: safe(selectedCompany?.address) || "",
+    addr2: safe(selectedCompany?.near) || "",
+    city: safe(selectedCompany?.city_state) || "",
+    pan: safe(selectedCompany?.pan_no) || "",
+    bank: safe(selectedCompany?.bank) || "",
+    ifsc: safe(selectedCompany?.ifsc_code) || "",
+    acNo: safe(selectedCompany?.account_no) || "",
+  };
+}, [selectedCompany]);
+
   function buildClientWisePdf() {
     const doc = new jsPDF("p", "pt", "a4");
     const pageW = doc.internal.pageSize.getWidth();
@@ -376,55 +405,82 @@ export default function DayWiseReport() {
     doc.text(`A/c No   ${broker.acNo || "-"}`, pageW - 210, 110);
 
     // ---------- client block ----------
+    
+
     const clientBoxX = 40;
-    const clientBoxY = 150;
-    const clientBoxW = pageW - 80;
-    const clientBoxH = 118;
+      const clientBoxY = 150;
+      const clientBoxW = pageW - 80;
 
-    doc.roundedRect(clientBoxX, clientBoxY, clientBoxW, clientBoxH, 8, 8);
+      doc.setFont("times", "bold");
+      doc.setFontSize(14);
 
-    doc.setFont("times", "bold");
-    doc.setFontSize(14);
-    doc.text((safe(selectedClient?.name) || clientLabel).toUpperCase(), 50, 175);
+      const clientNameText = (safe(selectedClient?.name) || clientLabel).toUpperCase();
+      const clientAddress = safe(selectedClient?.address);
+      const clientCity = safe(selectedClient?.city_state ?? selectedClient?.cityState);
+      const clientPin = safe(selectedClient?.pin_no ?? selectedClient?.pinNo);
+      const clientMobile = safe(selectedClient?.mobile);
+      const clientEmail = safe(selectedClient?.email);
 
-    doc.setFont("times", "normal");
-    doc.setFontSize(11);
+      const clientMaxWidth = 230;
+      const lineGap = 15;
 
-    const clientAddress = safe(selectedClient?.address);
-    const clientCity = safe(selectedClient?.city_state ?? selectedClient?.cityState);
-    const clientPin = safe(selectedClient?.pin_no ?? selectedClient?.pinNo);
-    const clientMobile = safe(selectedClient?.mobile);
-    const clientEmail = safe(selectedClient?.email);
+      // first calculate dynamic height
+      let measureY = 175 + 20;
 
-    let clientY = 195;
-    const clientMaxWidth = 250;
+      function measureWrapped(text: string, maxWidth: number, gap = lineGap) {
+        if (!text) return 0;
+        const wrapped = doc.splitTextToSize(text, maxWidth);
+        return wrapped.length * gap;
+      }
 
-    clientY = drawWrapped(clientAddress, 50, clientY, clientMaxWidth);
-    clientY = drawWrapped(clientCity, 50, clientY, clientMaxWidth);
+      measureY += measureWrapped(clientAddress, clientMaxWidth);
+      measureY += measureWrapped(clientCity, clientMaxWidth);
+      if (clientPin) measureY += measureWrapped(`PIN  ${clientPin}`, clientMaxWidth);
+      if (clientMobile) measureY += measureWrapped(`Mobile  ${clientMobile}`, clientMaxWidth);
+      if (clientEmail) measureY += measureWrapped(`e-Mail  ${clientEmail}`, clientMaxWidth);
 
-    if (clientPin) {
-      clientY = drawWrapped(`PIN  ${clientPin}`, 50, clientY, clientMaxWidth);
-    }
+      // keep enough minimum height for bill box too
+      const clientBoxH = Math.max(118, measureY - clientBoxY + 18);
 
-    if (clientMobile) {
-      clientY = drawWrapped(`Mobile  ${clientMobile}`, 50, clientY, clientMaxWidth);
-    }
+      doc.roundedRect(clientBoxX, clientBoxY, clientBoxW, clientBoxH, 8, 8);
 
-    if (clientEmail) {
-      clientY = drawWrapped(`e-Mail  ${clientEmail}`, 50, clientY, clientMaxWidth);
-    }
+      // actual print
+      doc.setFont("times", "bold");
+      doc.setFontSize(14);
+      doc.text(clientNameText, 50, 175);
 
-    // ---------- bill box ----------
-    const billBoxX = pageW - 255;
-    const billBoxY = 175;
-    const billBoxW = 200;
-    const billBoxH = 55;
+      doc.setFont("times", "normal");
+      doc.setFontSize(11);
 
-    doc.roundedRect(billBoxX, billBoxY, billBoxW, billBoxH, 10, 10);
-    doc.setFont("times", "bold");
-    doc.setFontSize(13);
-    doc.text(`Bill No : ${billNo || "-"}`, billBoxX + 25, billBoxY + 22);
-    doc.text(`Date : ${billDate || "-"}`, billBoxX + 25, billBoxY + 42);
+      let clientY = 195;
+      clientY = drawWrapped(clientAddress, 50, clientY, clientMaxWidth);
+      clientY = drawWrapped(clientCity, 50, clientY, clientMaxWidth);
+
+      if (clientPin) {
+        clientY = drawWrapped(`PIN  ${clientPin}`, 50, clientY, clientMaxWidth);
+      }
+
+      if (clientMobile) {
+        clientY = drawWrapped(`Mobile  ${clientMobile}`, 50, clientY, clientMaxWidth);
+      }
+
+      if (clientEmail) {
+        clientY = drawWrapped(`e-Mail  ${clientEmail}`, 50, clientY, clientMaxWidth);
+      }
+
+      // bill box aligned inside client shell
+      const billBoxW = 200;
+      const billBoxH = 55;
+      const billBoxX = pageW - 255;
+      const billBoxY = clientBoxY + 22;
+
+      doc.roundedRect(billBoxX, billBoxY, billBoxW, billBoxH, 10, 10);
+      doc.setFont("times", "bold");
+      doc.setFontSize(13);
+      doc.text(`Bill No : ${billNo || "-"}`, billBoxX + 25, billBoxY + 22);
+      doc.text(`Date : ${billDate || "-"}`, billBoxX + 25, billBoxY + 42);
+
+
 
     // ---------- grouped body ----------
     const cn = norm(clientName);
@@ -637,6 +693,10 @@ export default function DayWiseReport() {
     }
     buildDayOrItemPdf();
   }
+ 
+  function printReport() {
+     window.print();
+  }
 
   const datePickerHidden: React.CSSProperties = {
     position: "absolute",
@@ -757,6 +817,9 @@ export default function DayWiseReport() {
             <button style={btnPrimary} onClick={showReport} disabled={loading}>
               {loading ? "Loading..." : "Show Report"}
             </button>
+            <button style={btn} onClick={printReport} disabled={rows.length === 0}>
+              Print
+            </button>
             <button style={btn} onClick={buildPdf} disabled={rows.length === 0}>
               Download PDF
             </button>
@@ -787,16 +850,54 @@ export default function DayWiseReport() {
               </div>
 
       {/* Report preview */}
+      {/* Report preview */}
       <div style={reportWrap}>
-        <div style={paper}>
-          <div style={boxTitleRow}>
-            <div style={boxedTitle}>{reportTitle}</div>
-          </div>
-
-          <div style={subLine}>{headerLine}</div>
-
+        <div style={paper} id="report-preview">
           {reportMode === "client" ? (
             <>
+              <div style={previewTopRow}>
+                <div style={previewLeftBlock}>
+                  <div style={previewCompanyName}>{previewCompany.name}</div>
+                  {previewCompany.line1 ? <div style={previewText}>{previewCompany.line1}</div> : null}
+                  {previewCompany.addr1 ? <div style={previewText}>{previewCompany.addr1}</div> : null}
+                  {previewCompany.addr2 ? <div style={previewText}>{previewCompany.addr2}</div> : null}
+                  {previewCompany.city ? <div style={previewText}>{previewCompany.city}</div> : null}
+                </div>
+
+                <div style={previewRightBlock}>
+                  <div style={previewText}>PAN No : {previewCompany.pan || "-"}</div>
+                  <div style={previewText}>{previewCompany.bank || "-"}</div>
+                  <div style={previewText}>IFSC Code {previewCompany.ifsc || "-"}</div>
+                  <div style={previewText}>A/c No {previewCompany.acNo || "-"}</div>
+                </div>
+              </div>
+
+              <div style={previewClientShell}>
+                <div style={previewClientBox}>
+                  <div style={previewClientName}>
+                    {(safe(selectedClient?.name) || clientName || "CLIENT").toUpperCase()}
+                  </div>
+                  {safe(selectedClient?.address) ? <div style={previewText}>{safe(selectedClient?.address)}</div> : null}
+                  {safe(selectedClient?.city_state ?? selectedClient?.cityState) ? (
+                    <div style={previewText}>{safe(selectedClient?.city_state ?? selectedClient?.cityState)}</div>
+                  ) : null}
+                  {safe(selectedClient?.pin_no ?? selectedClient?.pinNo) ? (
+                    <div style={previewText}>PIN {safe(selectedClient?.pin_no ?? selectedClient?.pinNo)}</div>
+                  ) : null}
+                  {safe(selectedClient?.mobile) ? (
+                    <div style={previewText}>Mobile {safe(selectedClient?.mobile)}</div>
+                  ) : null}
+                  {safe(selectedClient?.email) ? (
+                    <div style={previewText}>e-Mail {safe(selectedClient?.email)}</div>
+                  ) : null}
+                </div>
+
+                <div style={previewBillBox}>
+                  <div style={previewBillLine}>Bill No : {billNo || "-"}</div>
+                  <div style={previewBillLine}>Date : {billDate || "-"}</div>
+                </div>
+              </div>
+
               <div style={tableWrap}>
                 <table style={tbl}>
                   <thead>
@@ -814,15 +915,13 @@ export default function DayWiseReport() {
                   </thead>
 
                   <tbody>
-                    {rows.length === 0 ? (
+                    {sortedPreviewRows.length === 0 ? (
                       <tr>
-                        <td style={td} colSpan={9}>
-                          No records
-                        </td>
+                        <td style={td} colSpan={9}>No records</td>
                       </tr>
                     ) : (
                       <>
-                        {groupClientRowsByProduct(rows, clientName).map((group, gi) => (
+                        {clientPreviewGroups.map((group, gi) => (
                           <React.Fragment key={`${group.product}-${gi}`}>
                             <tr>
                               <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
@@ -883,9 +982,17 @@ export default function DayWiseReport() {
                   </tbody>
                 </table>
               </div>
+
+              <div style={previewSign}>For {previewCompany.name}</div>
             </>
           ) : (
             <>
+              <div style={boxTitleRow}>
+                <div style={boxedTitle}>{reportTitle}</div>
+              </div>
+
+              <div style={subLine}>{headerLine}</div>
+
               <div style={tableWrap}>
                 <table style={tbl}>
                   <thead>
@@ -901,14 +1008,12 @@ export default function DayWiseReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.length === 0 ? (
+                    {sortedPreviewRows.length === 0 ? (
                       <tr>
-                        <td style={td} colSpan={8}>
-                          No records
-                        </td>
+                        <td style={td} colSpan={8}>No records</td>
                       </tr>
                     ) : (
-                      rows.map((r, idx) => {
+                      sortedPreviewRows.map((r, idx) => {
                         const conf = (r.confirm_date ?? r.confirmDate ?? "-").toString();
                         return (
                           <tr key={r.id ?? idx}>
@@ -1192,4 +1297,74 @@ const datePickerHiddenSmall: React.CSSProperties = {
   height: 28,
   opacity: 0,
   cursor: "pointer",
+};
+
+const previewTopRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 24,
+  marginBottom: 18,
+};
+
+const previewLeftBlock: React.CSSProperties = {
+  width: "50%",
+};
+
+const previewRightBlock: React.CSSProperties = {
+  width: "32%",
+  textAlign: "left",
+};
+
+const previewCompanyName: React.CSSProperties = {
+  fontSize: 22,
+  fontWeight: 800,
+  marginBottom: 8,
+};
+
+const previewText: React.CSSProperties = {
+  fontSize: 14,
+  lineHeight: 1.5,
+};
+
+const previewClientShell: React.CSSProperties = {
+  position: "relative",
+  border: "1px solid #6b7280",
+  borderRadius: 14,
+  padding: "18px 18px 18px 18px",
+  marginBottom: 14,
+  minHeight: 118,
+};
+
+const previewClientBox: React.CSSProperties = {
+  width: "55%",
+};
+
+const previewClientName: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 800,
+  marginBottom: 8,
+};
+
+const previewBillBox: React.CSSProperties = {
+  position: "absolute",
+  right: 24,
+  top: 22,
+  width: 220,
+  border: "1px solid #6b7280",
+  borderRadius: 16,
+  padding: "18px 22px",
+};
+
+const previewBillLine: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.8,
+};
+
+const previewSign: React.CSSProperties = {
+  marginTop: 28,
+  textAlign: "right",
+  fontSize: 20,
+  fontWeight: 800,
+  fontStyle: "italic",
 };
