@@ -723,60 +723,47 @@ const previewCompany = React.useMemo(() => {
               color: #000;
             }
 
-            body {
-              padding: 0;
-            }
-
-            #print-root {
-              width: 100%;
-            }
-
             table {
-              width: 100% !important;
-              border-collapse: collapse !important;
-              table-layout: fixed !important;
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              page-break-inside: auto;
+            }
+
+            thead {
+              display: table-header-group;
+            }
+
+            tfoot {
+              display: table-footer-group;
+            }
+
+            tr {
+              page-break-inside: avoid;
             }
 
             th, td {
-              border: 1px solid #444 !important;
-              padding: 4px 5px !important;
-              font-size: 10px !important;
-              line-height: 1.25 !important;
-              vertical-align: middle !important;
-              word-break: break-word !important;
-              overflow-wrap: anywhere !important;
-              white-space: normal !important;
+              border: 1px solid #444;
+              padding: 4px 5px;
+              font-size: 10px;
+              line-height: 1.25;
+              vertical-align: middle;
+              word-break: break-word;
+              overflow-wrap: anywhere;
+              white-space: normal;
             }
 
             th {
-              font-weight: 700 !important;
+              font-weight: 700;
             }
 
             #report-preview {
-              width: 100% !important;
-              max-width: 100% !important;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-
-            /* remove screen-only card spacing/shadows */
-            #print-root, #print-root * {
-              box-shadow: none !important;
-            }
-
-            /* make any flex row shrink correctly in print */
-            [style*="display: flex"] {
-              gap: 12px !important;
-            }
-
-            /* prevent right-side truncation */
-            .tableWrap, table, thead, tbody, tr {
-              max-width: 100% !important;
+              width: 100%;
             }
           </style>
         </head>
         <body>
-          <div id="print-root">${content.innerHTML}</div>
+          <div id="report-preview">${content.innerHTML}</div>
         </body>
       </html>
     `);
