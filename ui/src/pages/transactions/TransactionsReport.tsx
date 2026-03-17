@@ -118,8 +118,8 @@ async function fetchClientByName(name: string): Promise<Client | null> {
     phone: best.phone,
     mobile: best.mobile,
     email: best.email,
-    gstNo: best.gstNo ?? best.gst ?? best.gstin,
-    fssaiNo: best.fssaiNo ?? best.fssai,
+    gstNo: best.gstNo ?? best.gst_no ?? best.gst ?? best.gstin,
+    fssaiNo: best.fssaiNo ?? best.fssai_no ?? best.fssai,
   };
 }
 
@@ -303,16 +303,32 @@ async function sendWhatsApp(who: "seller" | "buyer") {
           <div style={headCellLeft}>SELLER</div>
           <div style={headCellRight}>BUYER</div>
         </div>
-
         <div style={grid}>
           {["Name", "Address", "GST No", "Phone", "FSSAI No"].map((lbl, i) => (
             <React.Fragment key={lbl}>
               <div style={leftLbl}>{lbl}</div>
               <div style={leftVal}>
-                {i === 0 ? seller?.name : i === 1 ? seller?.address : i === 2 ?  seller?.pinNo : i === 4 ? seller?.phone : i === 5 ? seller?.gstNo : seller?.gstNo}
+                {i === 0
+                  ? seller?.name || "-"
+                  : i === 1
+                  ? seller?.address || "-"
+                  : i === 2
+                  ? seller?.gstNo || "-"
+                  : i === 3
+                  ? seller?.phone || "-"
+                  : seller?.fssaiNo || "-"}
               </div>
+
               <div style={rightVal}>
-                {i === 0 ? buyer?.name : i === 1 ? buyer?.address : i === 2 ? buyer?.cityState : i === 3 ? buyer?.pinNo : i === 4 ? buyer?.phone : i === 5 ? buyer?.gstNo : buyer?.gstNo}
+                {i === 0
+                  ? buyer?.name || "-"
+                  : i === 1
+                  ? buyer?.address || "-"
+                  : i === 2
+                  ? buyer?.gstNo || "-"
+                  : i === 3
+                  ? buyer?.phone || "-"
+                  : buyer?.fssaiNo || "-"}
               </div>
             </React.Fragment>
           ))}

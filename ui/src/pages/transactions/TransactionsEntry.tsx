@@ -169,7 +169,7 @@ export default function TransactionsEntry() {
   const [gridLoaded, setGridLoaded] = useState(false); // to keep empty until search
   const [gridLoading, setGridLoading] = useState(false);
 
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  //const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   function setConfirmDateDDMMYY(next: string) {
   set("confirmDate", next);
@@ -184,14 +184,14 @@ export default function TransactionsEntry() {
 }
 
 
-  function toggleSelect(id: number, checked: boolean) {
-    setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
-  }
+  // function toggleSelect(id: number, checked: boolean) {
+  //   setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
+  // }
 
-  function toggleSelectAll(checked: boolean) {
-    if (!checked) return setSelectedIds([]);
-    setSelectedIds(gridRows.map((r) => Number(r.id)).filter((n) => n > 0));
-  }
+  // function toggleSelectAll(checked: boolean) {
+  //   if (!checked) return setSelectedIds([]);
+  //   setSelectedIds(gridRows.map((r) => Number(r.id)).filter((n) => n > 0));
+  // }
 
   const [form, setForm] = useState<FormState>(() => ({
     id: selected?.id ?? 0,
@@ -356,24 +356,24 @@ export default function TransactionsEntry() {
       const data = await res.json();
       setGridRows(Array.isArray(data) ? data : []);
       setGridLoaded(true);
-      setSelectedIds([]);
+      //setSelectedIds([]);
     } finally {
       setGridLoading(false);
     }
   }
 
-  async function bulkDeleteSelected() {
-    if (selectedIds.length === 0) return;
-    if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
+  // async function bulkDeleteSelected() {
+  //   if (selectedIds.length === 0) return;
+  //   if (!confirm(`Delete ${selectedIds.length} transaction(s)?`)) return;
 
-    // If you don't have bulk-delete endpoint, delete one by one safely
-    for (const id of selectedIds) {
-      await fetch(`${TX_API}/${id}`, { method: "DELETE" });
-    }
+  //   // If you don't have bulk-delete endpoint, delete one by one safely
+  //   for (const id of selectedIds) {
+  //     await fetch(`${TX_API}/${id}`, { method: "DELETE" });
+  //   }
 
-    setGridRows((prev) => prev.filter((r) => !selectedIds.includes(Number(r.id))));
-    setSelectedIds([]);
-  }
+  //   setGridRows((prev) => prev.filter((r) => !selectedIds.includes(Number(r.id))));
+  //   setSelectedIds([]);
+  // }
 
   type Opt = { id: number; name: string };
 
@@ -486,11 +486,9 @@ export default function TransactionsEntry() {
   return (
     <div style={wrap}>
       {/* Searchable dropdown sources */}
-      <datalist id="clientsList">
+     <datalist id="clientsList">
         {clientOpts.map((c) => (
-          <option key={c.id} value={c.name}>
-            {c.mobile ? `(${c.mobile})` : ""}
-          </option>
+         <option key={c.id} value={c.name || ""} />
         ))}
       </datalist>
 
@@ -791,17 +789,6 @@ export default function TransactionsEntry() {
                 Show Undelivered
               </button>
 
-              <button
-                style={{
-                  ...btnTopDanger,
-                  opacity: selectedIds.length ? 1 : 0.5,
-                  cursor: selectedIds.length ? "pointer" : "not-allowed",
-                }}
-                disabled={!selectedIds.length}
-                onClick={bulkDeleteSelected}
-              >
-                Bulk Delete ({selectedIds.length})
-              </button>
 
               <div style={{ marginLeft: "auto", fontSize: 12, color: "#475569" }}>
                 {gridLoading ? "Loading..." : gridLoaded ? `${gridRows.length} record(s)` : "Enter search and click Search"}
@@ -812,93 +799,45 @@ export default function TransactionsEntry() {
               <table style={table}>
                 <thead>
                   <tr>
-                    <th style={th}>
-                      <input
-                        type="checkbox"
-                        checked={gridRows.length > 0 && selectedIds.length === gridRows.length}
-                        onChange={(e) => toggleSelectAll(e.target.checked)}
-                      />
-                    </th>
                     <th style={th}>ID</th>
                     <th style={th}>Seller</th>
                     <th style={th}>Buyer</th>
-                    <th style={th}>Product</th>
-                    <th style={th}>Rate</th>
-                    <th style={th}>UnitRate</th>
-                    <th style={th}>Qty</th>
-                    <th style={th}>UnitQty</th>
-                    <th style={th}>Confirm</th>
-                    <th style={th}>Delivery</th>
-                    <th style={th}>Place</th>
-                    <th style={th}>Payment</th>
-                    <th style={th}>Flag</th>
                     <th style={th}>Status</th>
-                    <th style={th}>Actions</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {!gridLoaded ? (
                     <tr>
-                      <td style={emptyTd} colSpan={17}>
+                      <td style={emptyTd} colSpan={4}>
                         Type search and click Search.
                       </td>
                     </tr>
                   ) : gridRows.length === 0 ? (
                     <tr>
-                      <td style={emptyTd} colSpan={17}>
+                      <td style={emptyTd} colSpan={4}>
                         No results.
                       </td>
                     </tr>
                   ) : (
                     gridRows.map((r) => (
-                      <tr key={r.id} style={{ background: selectedId === r.id ? "#eef2ff" : "white" }}>
-                        <td style={td}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.includes(Number(r.id))}
-                            onChange={(e) => toggleSelect(Number(r.id), e.target.checked)}
-                          />
-                        </td>
+                      <tr
+                        key={r.id}
+                        style={{
+                          background: selectedId === r.id ? "#eef2ff" : "white",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          const norm = normalizeTxToForm(r);
+                          setSelectedId(Number(r.id));
+                          setDeliveryDateTouched(true);
+                          setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
+                          setForm((p) => ({ ...p, ...norm } as any));
+                        }}
+                      >
                         <td style={td}>{r.id}</td>
                         <td style={td}>{r.seller || ""}</td>
                         <td style={td}>{r.buyer || ""}</td>
-                        <td style={td}>{r.product || ""}</td>
-                        <td style={td}>{r.rate || ""}</td>
-                        <td style={td}>{r.unit_rate || r.unitRate || ""}</td>
-                        <td style={td}>{r.quantity || ""}</td>
-                        <td style={td}>{r.unit_qty || r.unitQty || ""}</td>
-                        <td style={td}>{r.confirm_date || r.confirmDate || ""}</td>
-                        <td style={td}>{r.delivery_date || r.deliveryDate || ""}</td>
-                        <td style={td}>{r.delivery_place || r.deliveryPlace || ""}</td>
-                        <td style={td}>{r.payment || ""}</td>
-                        <td style={td}>{r.flag || ""}</td>
                         <td style={td}>{r.status || ""}</td>
-                        <td style={td}>
-                          <button
-                            style={miniBtn}
-                            onClick={() => {
-                              const norm = normalizeTxToForm(r);
-                              setSelectedId(Number(r.id));
-                              setDeliveryDateTouched(true);
-                              setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
-                              setForm((p) => ({ ...p, ...norm } as any));
-                            }}
-                          >
-                            Modify
-                          </button>
-                          <button
-                            style={miniBtnDanger}
-                            onClick={async () => {
-                              if (!confirm("Delete this transaction?")) return;
-                              await fetch(`${TX_API}/${r.id}`, { method: "DELETE" });
-                              setGridRows((prev) => prev.filter((x) => Number(x.id) !== Number(r.id)));
-                              setSelectedIds((prev) => prev.filter((x) => x !== Number(r.id)));
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
                       </tr>
                     ))
                   )}
@@ -1127,12 +1066,12 @@ const btnTop: React.CSSProperties = {
   fontWeight: 700,
 };
 
-const btnTopDanger: React.CSSProperties = {
-  ...btnTop,
-  border: "1px solid #fecaca",
-  background: "#fff1f2",
-  color: "#b91c1c",
-};
+// const btnTopDanger: React.CSSProperties = {
+//   ...btnTop,
+//   border: "1px solid #fecaca",
+//   background: "#fff1f2",
+//   color: "#b91c1c",
+// };
 
 const tableWrap: React.CSSProperties = {
   flex: 1,
@@ -1187,12 +1126,12 @@ const miniBtn: React.CSSProperties = {
   marginRight: 6,
 };
 
-const miniBtnDanger: React.CSSProperties = {
-  ...miniBtn,
-  border: "1px solid #fecaca",
-  background: "#fff1f2",
-  color: "#b91c1c",
-};
+// const miniBtnDanger: React.CSSProperties = {
+//   ...miniBtn,
+//   border: "1px solid #fecaca",
+//   background: "#fff1f2",
+//   color: "#b91c1c",
+// };
 
 const gstWrap: React.CSSProperties = {
   border: "1px solid #8c95a3",

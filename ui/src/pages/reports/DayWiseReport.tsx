@@ -604,17 +604,17 @@ const previewCompany = React.useMemo(() => {
     const lastY = (doc as any).lastAutoTable?.finalY ?? 520;
 
     doc.setFont("times", "bolditalic");
-    doc.setFontSize(18);
+    doc.setFontSize(11);
     doc.text(`For ${broker.name}`, pageW - 220, lastY + 42);
 
     doc.save("client-wise-report.pdf");
   }
 
-  function buildDayOrItemPdf() {
+  function buildDayOrItemPdf(sortedRows) {
     const doc = new jsPDF("p", "pt", "a4");
 
     doc.setFont("times", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(11);
     const titleW = doc.getTextWidth(reportTitle) + 24;
     const x = (doc.internal.pageSize.getWidth() - titleW) / 2;
     doc.rect(x, 36, titleW, 22);
@@ -691,11 +691,103 @@ const previewCompany = React.useMemo(() => {
       buildClientWisePdf();
       return;
     }
-    buildDayOrItemPdf();
+    buildDayOrItemPdf(sortedRows);
   }
- 
+  
   function printReport() {
-     window.print();
+    const content = document.getElementById("report-preview");
+    if (!content) return;
+
+    const printWindow = window.open("", "", "width=1200,height=900");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Report</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+
+            * {
+              box-sizing: border-box;
+            }
+
+            html, body {
+              margin: 0;
+              padding: 0;
+              background: #fff;
+              font-family: "Times New Roman", serif;
+              color: #000;
+            }
+
+            body {
+              padding: 0;
+            }
+
+            #print-root {
+              width: 100%;
+            }
+
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              table-layout: fixed !important;
+            }
+
+            th, td {
+              border: 1px solid #444 !important;
+              padding: 4px 5px !important;
+              font-size: 10px !important;
+              line-height: 1.25 !important;
+              vertical-align: middle !important;
+              word-break: break-word !important;
+              overflow-wrap: anywhere !important;
+              white-space: normal !important;
+            }
+
+            th {
+              font-weight: 700 !important;
+            }
+
+            #report-preview {
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+
+            /* remove screen-only card spacing/shadows */
+            #print-root, #print-root * {
+              box-shadow: none !important;
+            }
+
+            /* make any flex row shrink correctly in print */
+            [style*="display: flex"] {
+              gap: 12px !important;
+            }
+
+            /* prevent right-side truncation */
+            .tableWrap, table, thead, tbody, tr {
+              max-width: 100% !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="print-root">${content.innerHTML}</div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
   }
 
   const datePickerHidden: React.CSSProperties = {
