@@ -483,6 +483,24 @@ export default function TransactionsEntry() {
     setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
   }, [selected]);
 
+  // Auto-calculate Amount Rs based on tax type
+  React.useEffect(() => {
+    if (!showDeliveryPanel) return;
+
+    const qty = parseFloat((form.deliveryQty || "0").toString().replace(/[^\d.-]/g, "")) || 0;
+    const rate = parseFloat((form.rate || "0").toString().replace(/[^\d.-]/g, "")) || 0;
+
+    let amount = qty * rate;
+
+    if (form.tax === "Plus GST") {
+      const gstPercent = parseFloat(gstValue || "0") || 0;
+      amount = amount + (amount * gstPercent / 100);
+    }
+    // For "Incl GST" and "GST Exempt": amount = qty * rate (no extra calculation)
+
+    set("amountRs", amount.toFixed(2));
+  }, [form.deliveryQty, form.rate, form.tax, gstValue, showDeliveryPanel]);
+
   return (
     <div style={wrap}>
       {/* Searchable dropdown sources */}

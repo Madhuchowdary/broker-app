@@ -386,12 +386,12 @@ const previewCompany = React.useMemo(() => {
     // ---------- company block ----------
     doc.setFont("times", "bold");
     doc.setFontSize(20);
-    doc.text(broker.name, 45, 55);
+    doc.text(broker.name, 45, 50);
 
     doc.setFont("times", "normal");
     doc.setFontSize(11);
 
-    let companyY = 76;
+    let companyY = 64;
     const companyMaxWidth = 250;
 
     companyY = drawWrapped(broker.line1, 45, companyY, companyMaxWidth);
@@ -452,7 +452,7 @@ const previewCompany = React.useMemo(() => {
       doc.setFont("times", "normal");
       doc.setFontSize(11);
 
-      let clientY = 195;
+      let clientY = 188;
       clientY = drawWrapped(clientAddress, 50, clientY, clientMaxWidth);
       clientY = drawWrapped(clientCity, 50, clientY, clientMaxWidth);
 
@@ -708,19 +708,31 @@ const previewCompany = React.useMemo(() => {
           <style>
             @page {
               size: A4 portrait;
-              margin: 10mm;
+              margin: 15mm 12mm;
             }
 
             * {
               box-sizing: border-box;
+              margin: 0;
+              padding: 0;
             }
 
             html, body {
-              margin: 0;
-              padding: 0;
               background: #fff;
               font-family: "Times New Roman", serif;
               color: #000;
+              font-size: 13px;
+              line-height: 1.5;
+            }
+
+            #report-preview {
+              width: 100%;
+              padding: 0;
+            }
+
+            /* Company / client preview blocks */
+            div[style*="display: flex"] {
+              display: flex !important;
             }
 
             table {
@@ -728,14 +740,11 @@ const previewCompany = React.useMemo(() => {
               border-collapse: collapse;
               table-layout: fixed;
               page-break-inside: auto;
+              font-size: 11px;
             }
 
             thead {
               display: table-header-group;
-            }
-
-            tfoot {
-              display: table-footer-group;
             }
 
             tr {
@@ -743,10 +752,10 @@ const previewCompany = React.useMemo(() => {
             }
 
             th, td {
-              border: 1px solid #444;
-              padding: 4px 5px;
-              font-size: 10px;
-              line-height: 1.25;
+              border: 1px solid #333;
+              padding: 6px 6px;
+              font-size: 11px;
+              line-height: 1.3;
               vertical-align: middle;
               word-break: break-word;
               overflow-wrap: anywhere;
@@ -755,10 +764,43 @@ const previewCompany = React.useMemo(() => {
 
             th {
               font-weight: 700;
+              background: #f3f4f6;
+              text-align: left;
+              white-space: nowrap;
             }
 
-            #report-preview {
-              width: 100%;
+            /* Boxed title for day/item reports */
+            div[style*="border: 2px solid"] {
+              border: 2px solid #333 !important;
+              padding: 6px 14px !important;
+              font-weight: 900 !important;
+              display: inline-block !important;
+            }
+
+            /* Client-wise rounded boxes */
+            div[style*="border-radius: 14px"],
+            div[style*="border-radius: 16px"] {
+              border: 1px solid #6b7280 !important;
+              page-break-inside: avoid;
+            }
+
+            /* Totals section */
+            div[style*="grid-template-columns: 1fr 1fr"][style*="border-top"] {
+              border-top: 1px solid #c8ced8 !important;
+              padding: 14px !important;
+            }
+
+            /* Grand total pill */
+            div[style*="border-radius: 16"][style*="border: 2px solid"] {
+              border: 2px solid #9aa3af !important;
+              border-radius: 16px !important;
+              padding: 12px 18px !important;
+            }
+
+            /* Signature line */
+            div[style*="font-style: italic"][style*="text-align: right"] {
+              margin-top: 24px !important;
+              font-size: 16px !important;
             }
           </style>
         </head>
@@ -774,7 +816,7 @@ const previewCompany = React.useMemo(() => {
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
-    }, 300);
+    }, 400);
   }
 
   const datePickerHidden: React.CSSProperties = {
@@ -1397,7 +1439,7 @@ const previewRightBlock: React.CSSProperties = {
 const previewCompanyName: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 800,
-  marginBottom: 8,
+  marginBottom: 2,
 };
 
 const previewText: React.CSSProperties = {
@@ -1421,7 +1463,7 @@ const previewClientBox: React.CSSProperties = {
 const previewClientName: React.CSSProperties = {
   fontSize: 16,
   fontWeight: 800,
-  marginBottom: 8,
+  marginBottom: 2,
 };
 
 const previewBillBox: React.CSSProperties = {

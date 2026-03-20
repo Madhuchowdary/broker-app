@@ -32,7 +32,10 @@ export default function App() {
       const url = search ? `${API_BASE}?q=${encodeURIComponent(search)}` : API_BASE;
       const res = await fetch(url);
       const data = await res.json();
-      setClients(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      // Sort alphabetically by name
+      list.sort((a: any, b: any) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+      setClients(list);
     } finally {
       setLoading(false);
     }
@@ -76,7 +79,6 @@ export default function App() {
         mobile: c.mobile || "",
         email: c.email || "",
         });
-        // scroll to top form for quick edits
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -100,7 +102,7 @@ export default function App() {
 
         await loadClients(q.trim());
         clearSelection();
-        setForm(emptyForm); // optional: clear edit panel
+        setForm(emptyForm);
         }
 
 
@@ -172,7 +174,6 @@ export default function App() {
       <div style={headerRow}>
         <div>
           <div style={title}>Client Details</div>
-          <div style={subtitle}>Add / Edit / Find clients (GST + FSSAI)</div>
         </div>
 
         <div style={searchRow}>
@@ -414,7 +415,6 @@ const headerRow = {
 };
 
 const title = { fontSize: 32, fontWeight: 800, letterSpacing: -0.4 };
-const subtitle = { marginTop: 2, color: "#475569" };
 
 const searchRow = {
   display: "flex",
@@ -500,13 +500,6 @@ const fssaiNoInput = {
   background: "white",
 };
 
-const actionsRow = {
-  display: "flex",
-  gap: 10,
-  alignItems: "center",
-  marginTop: 12,
-};
-
 const btn = {
   padding: "10px 14px",
   borderRadius: 12,
@@ -544,6 +537,7 @@ const btnDanger = {
 const tableWrap = {
   flex: 1,
   overflow: "auto",
+  maxHeight: 400,
   borderRadius: 12,
   border: "1px solid #eef2f7",
 };

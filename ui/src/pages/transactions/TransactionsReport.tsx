@@ -374,7 +374,6 @@ async function sendWhatsApp(who: "seller" | "buyer") {
         </div>
 
         <div style={bottomActions}>
-          <button style={btn} onClick={() => window.print()}>Print</button>
           <button style={btnPrimary} onClick={() => nav("/transactions/entry")}>OK</button>
         </div>
 
