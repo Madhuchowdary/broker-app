@@ -16,6 +16,7 @@ import Flags from "./pages/Flags";
 import TransactionsReport from "./pages/transactions/TransactionsReport";
 import DayWiseReport from "./pages/reports/DayWiseReport";
 import CompanyDetails from "./pages/maintenance/CompanyDetails";
+import Backup from "./pages/maintenance/Backup";
 
 
 
@@ -84,7 +85,7 @@ export default function App() {
 
           {/* MAINTENANCE tabs */}
           // MAINTENANCE pages (right menu)
-          <Route path="/maintenance/backup" element={<P title="Backup" />} />
+          <Route path="/maintenance/backup" element={<Backup />} />
           <Route path="/maintenance/change-password" element={<P title="Change Password" />} />
           <Route path="/maintenance/company-details" element={<CompanyDetails />} />
           <Route path="/maintenance/sms-email-settings" element={<P title="SMS / e-Mail Settings" />} />

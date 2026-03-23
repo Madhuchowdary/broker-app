@@ -6,9 +6,7 @@ export default function App() {
   const [clients, setClients] = useState([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-
-
+ 
   const emptyForm = useMemo(
     () => ({
       id: null,
@@ -49,7 +47,7 @@ export default function App() {
         setForm((p) => ({ ...p, [field]: value }));
     }
 
-    function toggleOne(id: number) {
+   /* function toggleOne(id: number) {
     setSelectedIds((prev) =>
         prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -65,7 +63,7 @@ export default function App() {
 
     function clearSelection() {
     setSelectedIds([]);
-    }
+    } */
 
 
     function onRowClick(c) {
@@ -82,6 +80,7 @@ export default function App() {
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
+   /* 
     async function onDeleteSelected() {
         if (selectedIds.length === 0) return;
 
@@ -104,7 +103,7 @@ export default function App() {
         clearSelection();
         setForm(emptyForm);
         }
-
+   */
 
   function onNew() {
     setForm(emptyForm);
@@ -311,7 +310,7 @@ export default function App() {
             <div style={smallText}>Click a row to edit. </div>
              {/* Record count (1 column) */}
             <div style={{ ...smallText, textAlign: "right", paddingBottom: 6 ,width:"100%"}}>
-                 <button
+                 {/* <button
                     style={{
                         ...btnDanger,
                         opacity: selectedIds.length ? 1 : 0.4,
@@ -322,7 +321,7 @@ export default function App() {
                     onClick={onDeleteSelected}
                     >
             Delete Selected ({selectedIds.length})
-            </button>
+            </button> */}
                 {loading ? "Loading…" : `${clients.length} record(s)`}
             </div>
           </div>
@@ -330,54 +329,36 @@ export default function App() {
 
         <div style={tableWrap}>
           <table style={table}>
-            <thead>
-              <tr>
-                <th style={th}>
-                    <input
-                        type="checkbox"
-                        checked={clients.length > 0 && selectedIds.length === clients.length}
-                        onChange={toggleAll}
-                    />
-                </th>
-                <th style={th}>Name</th>
-                <th style={th}>Mobile</th>
-                <th style={th}>GST</th>
-                <th style={th}>FSSAI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.length === 0 ? (
+              <thead>
                 <tr>
-                  <td style={emptyTd} colSpan={4}>
-                    No clients found.
-                  </td>
+                  <th style={th}>Name</th>
+                  <th style={th}>Mobile</th>
+                  <th style={th}>GST</th>
+                  <th style={th}>FSSAI</th>
                 </tr>
-              ) : (
-                clients.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => onRowClick(c)}
-                    style={rowStyle(form.id === c.id)}
-                  >
-                    <td style={td}>
-                        <input
-                            type="checkbox"
-                            checked={selectedIds.includes(c.id)}
-                            onChange={(e) => {
-                            e.stopPropagation();
-                            toggleOne(c.id);
-                            }}
-                        />
-                   </td>
-
-                    <td style={tdStrong}>{c.name}</td>
-                    <td style={td}>{c.mobile || "-"}</td>
-                    <td style={td}>{c.gst_no || "-"}</td>
-                    <td style={td}>{c.fssai_no || "-"}</td>
+              </thead>
+              <tbody>
+                {clients.length === 0 ? (
+                  <tr>
+                    <td style={emptyTd} colSpan={4}>
+                      No clients found.
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
+                ) : (
+                  clients.map((c) => (
+                    <tr
+                      key={c.id}
+                      onClick={() => onRowClick(c)}
+                      style={rowStyle(form.id === c.id)}
+                    >
+                      <td style={tdStrong}>{c.name}</td>
+                      <td style={td}>{c.mobile || "-"}</td>
+                      <td style={td}>{c.gst_no || "-"}</td>
+                      <td style={td}>{c.fssai_no || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
           </table>
         </div>
 

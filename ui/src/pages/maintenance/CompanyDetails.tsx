@@ -583,7 +583,7 @@ const btnDanger: React.CSSProperties = {
 };
 
 const table: React.CSSProperties = {
-  width: "100%",
+  width: "95vw",
   borderCollapse: "separate",
   borderSpacing: 0,
 };

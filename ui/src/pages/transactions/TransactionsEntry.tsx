@@ -152,6 +152,7 @@ export default function TransactionsEntry() {
         setGstSaving(false);
       }
     }
+    
       
 
 
@@ -818,6 +819,7 @@ export default function TransactionsEntry() {
                 <thead>
                   <tr>
                     <th style={th}>ID</th>
+                    <th style={th}>Date</th>
                     <th style={th}>Seller</th>
                     <th style={th}>Buyer</th>
                     <th style={th}>Status</th>
@@ -826,13 +828,13 @@ export default function TransactionsEntry() {
                 <tbody>
                   {!gridLoaded ? (
                     <tr>
-                      <td style={emptyTd} colSpan={4}>
+                      <td style={emptyTd} colSpan={5}>
                         Type search and click Search.
                       </td>
                     </tr>
                   ) : gridRows.length === 0 ? (
                     <tr>
-                      <td style={emptyTd} colSpan={4}>
+                      <td style={emptyTd} colSpan={5}>
                         No results.
                       </td>
                     </tr>
@@ -853,6 +855,7 @@ export default function TransactionsEntry() {
                         }}
                       >
                         <td style={td}>{r.id}</td>
+                        <td style={td}>{r.confirm_date || r.confirmDate || ""}</td>
                         <td style={td}>{r.seller || ""}</td>
                         <td style={td}>{r.buyer || ""}</td>
                         <td style={td}>{r.status || ""}</td>

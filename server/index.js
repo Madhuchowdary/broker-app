@@ -18,6 +18,7 @@ const settingsRouter = require("./routes/settings");
 const mailRouter = require("./routes/mail");
 const reportsRouter = require("./routes/reports");
 const companyDetailsRouter = require("./routes/company-details");
+const maintenanceRouter = require("./routes/maintenance");
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/mail", mailRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/company-details", companyDetailsRouter);
+app.use("/api/maintenance", maintenanceRouter);
 
 
 const PORT = process.env.PORT || 4000;

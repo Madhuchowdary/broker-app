@@ -708,7 +708,7 @@ const previewCompany = React.useMemo(() => {
           <style>
             @page {
               size: A4 portrait;
-              margin: 15mm 12mm;
+              margin: 10mm 8mm;
             }
 
             * {
@@ -721,8 +721,8 @@ const previewCompany = React.useMemo(() => {
               background: #fff;
               font-family: "Times New Roman", serif;
               color: #000;
-              font-size: 13px;
-              line-height: 1.5;
+              font-size: 11px;
+              line-height: 1.3;
             }
 
             #report-preview {
@@ -730,7 +730,6 @@ const previewCompany = React.useMemo(() => {
               padding: 0;
             }
 
-            /* Company / client preview blocks */
             div[style*="display: flex"] {
               display: flex !important;
             }
@@ -740,7 +739,7 @@ const previewCompany = React.useMemo(() => {
               border-collapse: collapse;
               table-layout: fixed;
               page-break-inside: auto;
-              font-size: 11px;
+              font-size: 9px;
             }
 
             thead {
@@ -753,13 +752,12 @@ const previewCompany = React.useMemo(() => {
 
             th, td {
               border: 1px solid #333;
-              padding: 6px 6px;
-              font-size: 11px;
-              line-height: 1.3;
+              padding: 1px 2px;
+              font-size: 9px;
+              line-height: 1.2;
               vertical-align: middle;
-              word-break: break-word;
-              overflow-wrap: anywhere;
-              white-space: normal;
+              overflow: hidden;
+              white-space: nowrap;
             }
 
             th {
@@ -769,12 +767,19 @@ const previewCompany = React.useMemo(() => {
               white-space: nowrap;
             }
 
+            /* Allow client/seller/buyer names to wrap if truly needed */
+            td.wrap-cell {
+              white-space: normal;
+              word-break: break-word;
+            }
+
             /* Boxed title for day/item reports */
             div[style*="border: 2px solid"] {
               border: 2px solid #333 !important;
-              padding: 6px 14px !important;
+              padding: 4px 10px !important;
               font-weight: 900 !important;
               display: inline-block !important;
+              font-size: 12px !important;
             }
 
             /* Client-wise rounded boxes */
@@ -787,20 +792,44 @@ const previewCompany = React.useMemo(() => {
             /* Totals section */
             div[style*="grid-template-columns: 1fr 1fr"][style*="border-top"] {
               border-top: 1px solid #c8ced8 !important;
-              padding: 14px !important;
+              padding: 8px !important;
             }
 
             /* Grand total pill */
             div[style*="border-radius: 16"][style*="border: 2px solid"] {
               border: 2px solid #9aa3af !important;
               border-radius: 16px !important;
-              padding: 12px 18px !important;
+              padding: 8px 14px !important;
             }
 
             /* Signature line */
             div[style*="font-style: italic"][style*="text-align: right"] {
-              margin-top: 24px !important;
+              margin-top: 16px !important;
+              font-size: 14px !important;
+            }
+
+            /* Company name in print */
+            div[style*="font-size: 22px"][style*="font-weight: 800"] {
+              font-size: 18px !important;
+            }
+
+            /* Preview text lines - compact */
+            div[style*="font-size: 14px"][style*="line-height: 1.5"] {
+              font-size: 11px !important;
+              line-height: 1.2 !important;
+            }
+
+            /* Totals styling compact */
+            div[style*="letter-spacing: 2"][style*="font-size: 18px"] {
+              font-size: 14px !important;
+              letter-spacing: 1px !important;
+              padding: 6px 10px !important;
+            }
+
+            div[style*="letter-spacing: 3"][style*="font-size: 20px"] {
               font-size: 16px !important;
+              letter-spacing: 1px !important;
+              padding: 10px 16px !important;
             }
           </style>
         </head>
@@ -1021,34 +1050,45 @@ const previewCompany = React.useMemo(() => {
 
               <div style={tableWrap}>
                 <table style={tbl}>
+                  <colgroup>
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "22%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "6%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "17%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "8%" }} />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th style={th}>Confirm Date</th>
-                      <th style={th}>Seller / Buyer</th>
-                      <th style={{ ...th, textAlign: "right" }}>Price Rs.</th>
-                      <th style={{ ...th, textAlign: "right" }}>Qty</th>
-                      <th style={th}>Qty Unit</th>
-                      <th style={th}>Delivery Date</th>
-                      <th style={th}>Tanker No</th>
-                      <th style={th}>Bill No</th>
-                      <th style={{ ...th, textAlign: "right" }}>Brokerage Rs.</th>
+                      <th style={thCompact}>Conf Date</th>
+                      <th style={thCompact}>Seller / Buyer</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>Price</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>Qty</th>
+                      <th style={thCompact}>Unit</th>
+                      <th style={thCompact}>Del.Date</th>
+                      <th style={thCompact}>Tanker No</th>
+                      <th style={thCompact}>Bill No</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>Brokerage</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {sortedPreviewRows.length === 0 ? (
                       <tr>
-                        <td style={td} colSpan={9}>No records</td>
+                        <td style={tdCompact} colSpan={9}>No records</td>
                       </tr>
                     ) : (
                       <>
                         {clientPreviewGroups.map((group, gi) => (
                           <React.Fragment key={`${group.product}-${gi}`}>
                             <tr>
-                              <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
+                              <td style={{ ...tdCompact, fontWeight: 700 }} colSpan={2}>
                                 {group.product}
                               </td>
-                              <td style={{ ...td, textAlign: "center" }} colSpan={7}>
+                              <td style={{ ...tdCompact, textAlign: "center" }} colSpan={7}>
                                 Brokerage Bill From {fromDate} To {toDate}
                               </td>
                             </tr>
@@ -1066,24 +1106,24 @@ const previewCompany = React.useMemo(() => {
 
                               return (
                                 <tr key={`${group.product}-${r.id ?? idx}`}>
-                                  <td style={td}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
-                                  <td style={td}>{oppositeParty}</td>
-                                  <td style={{ ...td, textAlign: "right" }}>{safe(r.rate || "-")}</td>
-                                  <td style={{ ...td, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
-                                  <td style={td}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
-                                  <td style={td}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
-                                  <td style={td}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
-                                  <td style={td}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
-                                  <td style={{ ...td, textAlign: "right" }}>{money(brokerage)}</td>
+                                  <td style={tdCompact}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
+                                  <td style={tdCompact}>{oppositeParty}</td>
+                                  <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.rate || "-")}</td>
+                                  <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
+                                  <td style={tdCompact}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
+                                  <td style={tdCompact}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
+                                  <td style={tdCompact}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
+                                  <td style={tdCompact}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
+                                  <td style={{ ...tdCompact, textAlign: "right" }}>{money(brokerage)}</td>
                                 </tr>
                               );
                             })}
 
                             <tr>
-                              <td style={{ ...td, textAlign: "right", fontStyle: "italic" }} colSpan={8}>
+                              <td style={{ ...tdCompact, textAlign: "right", fontStyle: "italic" }} colSpan={8}>
                                 {group.product} Total Amount
                               </td>
-                              <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
+                              <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
                                 {money(group.total)}
                               </td>
                             </tr>
@@ -1091,10 +1131,10 @@ const previewCompany = React.useMemo(() => {
                         ))}
 
                         <tr>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }} colSpan={8}>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }} colSpan={8}>
                             Grand Total
                           </td>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
                             {money(grandTotal)}
                           </td>
                         </tr>
@@ -1116,40 +1156,50 @@ const previewCompany = React.useMemo(() => {
 
               <div style={tableWrap}>
                 <table style={tbl}>
+                  <colgroup>
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "26%" }} />
+                    <col style={{ width: "6%" }} />
+                    <col style={{ width: "26%" }} />
+                    <col style={{ width: "6%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "8%" }} />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th style={th}>Conf.Date</th>
-                      <th style={th}>Seller Name</th>
-                      <th style={{ ...th, textAlign: "right" }}>S.brok</th>
-                      <th style={th}>Buyer Name</th>
-                      <th style={{ ...th, textAlign: "right" }}>B.brok</th>
-                      <th style={th}>Item Name</th>
-                      <th style={th}>Qty</th>
-                      <th style={th}>Price</th>
+                      <th style={thCompact}>Conf.Date</th>
+                      <th style={thCompact}>Seller Name</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>S.brok</th>
+                      <th style={thCompact}>Buyer Name</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>B.brok</th>
+                      <th style={thCompact}>Item Name</th>
+                      <th style={thCompact}>Qty</th>
+                      <th style={thCompact}>Price</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedPreviewRows.length === 0 ? (
                       <tr>
-                        <td style={td} colSpan={8}>No records</td>
+                        <td style={tdCompact} colSpan={8}>No records</td>
                       </tr>
                     ) : (
                       sortedPreviewRows.map((r, idx) => {
                         const conf = (r.confirm_date ?? r.confirmDate ?? "-").toString();
                         return (
                           <tr key={r.id ?? idx}>
-                            <td style={td}>{toDMonYY(conf)}</td>
-                            <td style={td}>{r.seller ?? "-"}</td>
-                            <td style={{ ...td, textAlign: "right" }}>
+                            <td style={tdCompact}>{toDMonYY(conf)}</td>
+                            <td style={tdCompact}>{r.seller ?? "-"}</td>
+                            <td style={{ ...tdCompact, textAlign: "right" }}>
                               {money(toNumber(r.seller_brokerage ?? r.sellerBrokerage))}
                             </td>
-                            <td style={td}>{r.buyer ?? "-"}</td>
-                            <td style={{ ...td, textAlign: "right" }}>
+                            <td style={tdCompact}>{r.buyer ?? "-"}</td>
+                            <td style={{ ...tdCompact, textAlign: "right" }}>
                               {money(toNumber(r.buyer_brokerage ?? r.buyerBrokerage))}
                             </td>
-                            <td style={td}>{r.product ?? "-"}</td>
-                            <td style={td}>{r.quantity ?? "-"}</td>
-                            <td style={td}>{r.rate ?? "-"}</td>
+                            <td style={tdCompact}>{r.product ?? "-"}</td>
+                            <td style={tdCompact}>{r.quantity ?? "-"}</td>
+                            <td style={tdCompact}>{r.rate ?? "-"}</td>
                           </tr>
                         );
                       })
@@ -1263,10 +1313,10 @@ const btn: React.CSSProperties = {
 const reportWrap: React.CSSProperties = { marginTop: 18, display: "flex", justifyContent: "center" };
 
 const paper: React.CSSProperties = {
-  width: "min(980px, 100%)",
+  width: "min(780px, 100%)",
   background: "#fff",
   border: "1px solid #c8ced8",
-  padding: 18,
+  padding: 14,
 };
 
 const boxTitleRow: React.CSSProperties = { display: "flex", justifyContent: "center" };
@@ -1289,21 +1339,38 @@ const tableWrap: React.CSSProperties = { marginTop: 10, overflowX: "auto" };
 const tbl: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
-  fontSize: 13,
+  tableLayout: "fixed",
+  fontSize: 11,
 };
 
 const th: React.CSSProperties = {
   border: "1px solid #333",
-  padding: "8px 6px",
+  padding: "6px 4px",
   textAlign: "left",
   background: "#f3f4f6",
   whiteSpace: "nowrap",
+  fontSize: 11,
+};
+
+const thCompact: React.CSSProperties = {
+  ...th,
+  padding: "3px 2px",
+  fontSize: 10,
 };
 
 const td: React.CSSProperties = {
   border: "1px solid #333",
-  padding: "8px 6px",
-  verticalAlign: "top",
+  padding: "4px 4px",
+  verticalAlign: "middle",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+};
+
+const tdCompact: React.CSSProperties = {
+  ...td,
+  padding: "2px 2px",
+  fontSize: 10,
 };
 
 const totalsGrid: React.CSSProperties = {
