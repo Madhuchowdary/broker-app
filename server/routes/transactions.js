@@ -54,17 +54,28 @@ router.get("/", (req, res) => {
     args.push(status);
   }
 
+  // if (q) {
+  //   where.push(`
+  //     (
+  //       seller LIKE ? OR buyer LIKE ? OR product LIKE ? OR
+  //       delivery_place LIKE ? OR payment LIKE ? OR flag LIKE ? OR
+  //       tanker_no LIKE ? OR bill_no LIKE ? OR
+  //       transaction_id LIKE ?
+  //     )
+  //   `);
+  //   const like = `%${q}%`;
+  //   args.push(like, like, like, like, like, like, like, like, like);
+  // }
   if (q) {
     where.push(`
       (
-        seller LIKE ? OR buyer LIKE ? OR product LIKE ? OR
-        delivery_place LIKE ? OR payment LIKE ? OR flag LIKE ? OR
-        tanker_no LIKE ? OR bill_no LIKE ? OR
-        transaction_id LIKE ?
+        CAST(id AS TEXT) LIKE ? OR
+        seller LIKE ? OR
+        buyer LIKE ?
       )
     `);
     const like = `%${q}%`;
-    args.push(like, like, like, like, like, like, like, like, like);
+    args.push(like, like, like);
   }
 
   const sql = `

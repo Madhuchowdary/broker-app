@@ -481,7 +481,7 @@ export default function TransactionsEntry() {
     setForm((p) => ({ ...p, ...norm } as any));
 
     setDeliveryDateTouched(true);
-    setShowDeliveryPanel((norm.status ?? "UNDELIVERED") === "UNDELIVERED");
+    setShowDeliveryPanel(true);
   }, [selected]);
 
   // Auto-calculate Amount Rs based on tax type

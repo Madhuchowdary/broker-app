@@ -512,8 +512,10 @@ const previewCompany = React.useMemo(() => {
           safe(r.confirm_date ?? r.confirmDate ?? "-"),
           oppositeParty,
           safe(r.rate || "-"),
-          safe(r.quantity || "-"),
-          safe(r.unit_qty ?? r.unitQty ?? "-"),
+          // safe(r.quantity || "-"),
+          // safe(r.unit_qty ?? r.unitQty ?? "-"),
+          safe((r.delivery_qty ?? r.deliveryQty) || "-"),
+          safe(r.delivery_unit_qty ?? r.deliveryUnitQty ?? "-"),
           safe(r.delivery_date ?? r.deliveryDate ?? "-"),
           safe(r.tanker_no ?? r.tankerNo ?? "-"),
           safe(r.bill_no ?? r.billNo ?? "-"),
@@ -1109,8 +1111,10 @@ const previewCompany = React.useMemo(() => {
                                   <td style={tdCompact}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
                                   <td style={tdCompact}>{oppositeParty}</td>
                                   <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.rate || "-")}</td>
-                                  <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
-                                  <td style={tdCompact}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td>
+                                  {/* <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
+                                  <td style={tdCompact}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td> */}
+                                 <td style={{ ...tdCompact, textAlign: "right" }}>{safe((r.delivery_qty ?? r.deliveryQty) || "-")}</td>
+<td style={tdCompact}>{safe(r.delivery_unit_qty ?? r.deliveryUnitQty ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>
