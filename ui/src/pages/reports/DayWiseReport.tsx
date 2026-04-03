@@ -12,19 +12,19 @@ function pad2(n: number) {
 function toDDMMYY(d: Date) {
   const dd = pad2(d.getDate());
   const mm = pad2(d.getMonth() + 1);
-  const yy = pad2(d.getFullYear() % 100);
-  return `${dd}-${mm}-${yy}`;
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 }
 
 function fromDDMMYY(s: string) {
   const t = (s || "").trim().replaceAll("/", "-");
-  const m = t.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+  const m = t.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (!m) return null;
 
   const dd = Number(m[1]);
   const mm = Number(m[2]);
   const yy = Number(m[3]);
-  const yyyy = 2000 + yy;
+  const yyyy = Number(m[3]);
 
   const d = new Date(yyyy, mm - 1, dd);
   if (Number.isNaN(d.getTime())) return null;
@@ -338,7 +338,7 @@ const clientPreviewGroups = React.useMemo(() => {
 
 const previewCompany = React.useMemo(() => {
   return {
-    name: safe(selectedCompany?.name) || "ANIL A SHAH",
+    name: safe(selectedCompany?.name) ||"",
     line1: safe(selectedCompany?.title) || "",
     addr1: safe(selectedCompany?.address) || "",
     addr2: safe(selectedCompany?.near) || "",
@@ -347,6 +347,10 @@ const previewCompany = React.useMemo(() => {
     bank: safe(selectedCompany?.bank) || "",
     ifsc: safe(selectedCompany?.ifsc_code) || "",
     acNo: safe(selectedCompany?.account_no) || "",
+    upiId: safe(selectedCompany?.contact_nos
+ ?? selectedCompany?.contact_nos
+) || "",
+
   };
 }, [selectedCompany]);
 
@@ -362,7 +366,7 @@ const previewCompany = React.useMemo(() => {
     });
 
     const broker = {
-      name: safe(selectedCompany?.name) || "ANIL A SHAH",
+      name: safe(selectedCompany?.name) || "",
       line1: safe(selectedCompany?.title) || "",
       addr1: safe(selectedCompany?.address) || "",
       addr2: safe(selectedCompany?.near) || "",
@@ -607,7 +611,7 @@ const previewCompany = React.useMemo(() => {
 
     doc.setFont("times", "bolditalic");
     doc.setFontSize(11);
-    doc.text(`For ${broker.name}`, pageW - 220, lastY + 42);
+   if (broker.name) doc.text(`For ${broker.name}`, pageW - 220, lastY + 42);
 
     doc.save("client-wise-report.pdf");
   }
@@ -873,7 +877,7 @@ const previewCompany = React.useMemo(() => {
                 style={dateInput}
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                placeholder="dd-mm-yy"
+                placeholder="dd-mm-yyyy"
               />
               <div style={calBtn}>📅</div>
               <input
@@ -892,7 +896,7 @@ const previewCompany = React.useMemo(() => {
                 style={dateInput}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                placeholder="dd-mm-yy"
+                placeholder="dd-mm-yyyy"
               />
               <div style={calBtn}>📅</div>
               <input
@@ -944,7 +948,7 @@ const previewCompany = React.useMemo(() => {
                   style={dateInputSmall}
                   value={billDate}
                   onChange={(e) => setBillDate(e.target.value)}
-                  placeholder="dd-mm-yy"
+                  placeholder="dd-mm-yyyy"
                 />
                 <div style={calBtn}>📅</div>
                 <input
@@ -1017,10 +1021,11 @@ const previewCompany = React.useMemo(() => {
                 </div>
 
                 <div style={previewRightBlock}>
-                  <div style={previewText}>PAN No : {previewCompany.pan || "-"}</div>
-                  <div style={previewText}>{previewCompany.bank || "-"}</div>
-                  <div style={previewText}>IFSC Code {previewCompany.ifsc || "-"}</div>
-                  <div style={previewText}>A/c No {previewCompany.acNo || "-"}</div>
+                  {previewCompany.pan ? <div style={previewText}>PAN No : {previewCompany.pan}</div> : null}
+                  {previewCompany.bank ? <div style={previewText}>{previewCompany.bank}</div> : null}
+                  {previewCompany.ifsc ? <div style={previewText}>IFSC Code : {previewCompany.ifsc}</div> : null}
+                  {previewCompany.acNo ? <div style={previewText}>A/c No : {previewCompany.acNo}</div> : null}
+                  {previewCompany.upiId ? <div style={previewText}>UPI ID : {previewCompany.upiId}</div> : null}
                 </div>
               </div>
 
@@ -1054,9 +1059,9 @@ const previewCompany = React.useMemo(() => {
                 <table style={tbl}>
                   <colgroup>
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "22%" }} />
-                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "25%" }} />
                     <col style={{ width: "6%" }} />
+                    <col style={{ width: "4%" }} />
                     <col style={{ width: "7%" }} />
                     <col style={{ width: "9%" }} />
                     <col style={{ width: "17%" }} />
@@ -1148,7 +1153,7 @@ const previewCompany = React.useMemo(() => {
                 </table>
               </div>
 
-              <div style={previewSign}>For {previewCompany.name}</div>
+              {previewCompany.name ? <div style={previewSign}>For {previewCompany.name}</div> : null}
             </>
           ) : (
             <>

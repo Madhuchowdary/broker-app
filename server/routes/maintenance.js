@@ -17,14 +17,13 @@ function toDDMMYY(d) {
 
 function fromDDMMYY(s) {
   const t = (s || "").trim().replaceAll("/", "-");
-  const m = t.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+  const m = t.match(/^(\d{2})-(\d{2})-(\d{2,4})$/);
   if (!m) return null;
 
   const dd = Number(m[1]);
   const mm = Number(m[2]);
-  const yy = Number(m[3]);
-  const yyyy = 2000 + yy;
-
+  const raw = Number(m[3]);
+  const yyyy = raw < 100 ? 2000 + raw : raw;
   const d = new Date(yyyy, mm - 1, dd);
   if (Number.isNaN(d.getTime())) return null;
   return d;
@@ -51,14 +50,14 @@ router.get("/backup", async (req, res) => {
     const fyStart = getFinancialYearStart(today);
 
     const allTransactions = db
-      .prepare(`SELECT * FROM transactions WHERE is_active = 1 ORDER BY id ASC`)
-      .all();
+    .prepare(`SELECT * FROM transactions ORDER BY id ASC`)
+    .all();
 
     const transactions = allTransactions.filter((r) => {
-      const d = fromDDMMYY(r.confirm_date || "");
-      return d && d >= fyStart && d <= today;
+    const d = fromDDMMYY(r.confirm_date || "");
+    return d && d >= fyStart && d <= today;
     });
-
+    
     const clients = db.prepare(`SELECT * FROM clients WHERE is_active = 1 ORDER BY id ASC`).all();
     const itemTypes = db.prepare(`SELECT * FROM item_types WHERE is_active = 1 ORDER BY id ASC`).all();
     const qtyTypes = db.prepare(`SELECT * FROM qty_types WHERE is_active = 1 ORDER BY id ASC`).all();
@@ -364,4 +363,33 @@ router.post("/restore", upload.single("file"), async (req, res) => {
   }
 });
 
+
+router.get("/fix-dates", (req, res) => {
+  try {
+    const result = db.prepare(`
+      UPDATE transactions
+      SET
+        confirm_date = CASE
+          WHEN confirm_date IS NOT NULL
+               AND length(confirm_date) = 8
+          THEN substr(confirm_date, 1, 6) || '20' || substr(confirm_date, 7, 2)
+          ELSE confirm_date
+        END,
+        delivery_date = CASE
+          WHEN delivery_date IS NOT NULL
+               AND length(delivery_date) = 8
+          THEN substr(delivery_date, 1, 6) || '20' || substr(delivery_date, 7, 2)
+          ELSE delivery_date
+        END
+    `).run();
+
+    res.json({
+      message: "Date migration completed",
+      changes: result.changes,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Migration failed" });
+  }
+});
 module.exports = router;

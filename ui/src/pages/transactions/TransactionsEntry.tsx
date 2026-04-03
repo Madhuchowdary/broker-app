@@ -14,7 +14,7 @@ const TX_API = "/api/transactions";
 function asDDMMYY(v: any): string {
   const s = (v ?? "").toString().trim();
   if (!s) return "";
-  // already dd-mm-yy or dd/mm/yy
+  // already dd-mm-yy or dd/mm/yyyy
   if (/^\d{2}[-/]\d{2}[-/]\d{2}$/.test(s)) return s.replaceAll("/", "-");
   // ISO yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
@@ -64,23 +64,23 @@ function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-// Date -> "dd-mm-yy"
+// Date -> "dd-mm-yyyy"
 function toDDMMYY(d: Date) {
-  const dd = pad2(d.getDate());
+ const dd = pad2(d.getDate());
   const mm = pad2(d.getMonth() + 1);
-  const yy = pad2(d.getFullYear() % 100);
-  return `${dd}-${mm}-${yy}`;
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 }
 
-// "dd-mm-yy" or "dd/mm/yy" -> Date | null
+// "dd-mm-yyyy" or "dd/mm/yy" -> Date | null
 function fromDDMMYY(s: string) {
   const t = (s || "").trim().replaceAll("/", "-");
-  const m = t.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+   const m = t.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (!m) return null;
   const dd = Number(m[1]);
   const mm = Number(m[2]);
   const yy = Number(m[3]);
-  const yyyy = 2000 + yy; // adjust if you need 19xx later
+  const yyyy = Number(m[3]); // adjust if you need 19xx later
   const d = new Date(yyyy, mm - 1, dd);
   if (Number.isNaN(d.getTime())) return null;
   // validate round-trip
@@ -644,7 +644,7 @@ export default function TransactionsEntry() {
                         style={dateInput}
                         value={form.confirmDate}
                         onChange={(e) => setConfirmDateDDMMYY(e.target.value)}
-                        placeholder="dd-mm-yy"
+                        placeholder="dd-mm-yyyy"
                     />
 
 
@@ -672,7 +672,7 @@ export default function TransactionsEntry() {
                         setDeliveryDateTouched(true);
                         set("deliveryDate", e.target.value);
                     }}
-                    placeholder="dd-mm-yy"
+                    placeholder="dd-mm-yyyy"
                   />
                  <input
                     type="date"
