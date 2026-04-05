@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import MaintenanceRightMenu from "../components/MaintenanceRightMenu";
 
 
@@ -47,10 +47,16 @@ function getActiveTop(pathname: string): TopKey {
 
 export default function MainLayout() {
   const loc = useLocation();
+  const navigate = useNavigate();
   const activeTop = getActiveTop(loc.pathname);
   const isReports = activeTop === "reports";
   const isMaintenance = activeTop === "maintenance";
 
+  function handleLogout() {
+    localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("loggedInUser");
+    navigate("/login", { replace: true });
+  }
 
   return (
     <div style={shell}>
@@ -75,11 +81,11 @@ export default function MainLayout() {
 
         <div style={{ marginLeft: "auto" }}>
           <button
-            style={exitBtn}
-            onClick={() => window.close()} // browser may block; still ok
-            title="Exit"
+            style={logoutBtn}
+            onClick={handleLogout}
+            title="Logout"
           >
-            Exit
+            Logout
           </button>
         </div>
       </div>
@@ -205,11 +211,11 @@ const topItemActive: React.CSSProperties = {
   border: "1px solid #b8c7ff",
 };
 
-const exitBtn: React.CSSProperties = {
+const logoutBtn: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: 8,
   border: "1px solid #cfd8e3",
-  background: "white",
+  background: "#fff7ed",
   cursor: "pointer",
   fontWeight: 700,
 };

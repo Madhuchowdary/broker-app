@@ -99,6 +99,39 @@ async function fetchClientByName(name: string) {
   return exact || data[0];
 }
 
+function buildClientExtractFromTransactions(list: any[], fromDate: string, toDate: string) {
+  const totals = new Map<string, number>();
+
+  list.forEach((r) => {
+    const conf = safe(r.confirm_date ?? r.confirmDate);
+    if (!inRangeDDMMYY(conf, fromDate, toDate)) return;
+
+    const status = norm(r.status);
+    if (status === "undelivered") return;
+
+    const seller = safe(r.seller);
+    const buyer = safe(r.buyer);
+
+    const sellerBrokerage = toNumber(r.seller_brokerage ?? r.sellerBrokerage);
+    const buyerBrokerage = toNumber(r.buyer_brokerage ?? r.buyerBrokerage);
+
+    if (seller) {
+      totals.set(seller, (totals.get(seller) || 0) + sellerBrokerage);
+    }
+
+    if (buyer) {
+      totals.set(buyer, (totals.get(buyer) || 0) + buyerBrokerage);
+    }
+  });
+
+  return Array.from(totals.entries())
+    .map(([clientName, totalBrokerage]) => ({
+      clientName,
+      totalBrokerage,
+    }))
+    .sort((a, b) => a.clientName.localeCompare(b.clientName, undefined, { sensitivity: "base" }));
+}
+
 function groupClientRowsByProduct(list: any[], clientName: string) {
   const cn = norm(clientName);
 
@@ -138,7 +171,6 @@ function groupClientRowsByProduct(list: any[], clientName: string) {
 
 export default function DayWiseReport() {
   const today = React.useMemo(() => new Date(), []);
-
   const [fromDate, setFromDate] = React.useState(toDDMMYY(today));
   const [toDate, setToDate] = React.useState(toDDMMYY(today));
   const [clientName, setClientName] = React.useState("");
@@ -155,6 +187,16 @@ export default function DayWiseReport() {
   const [selectedClient, setSelectedClient] = React.useState<any | null>(null);
   const [clients, setClients] = React.useState<any[]>([]);
   const [items, setItems] = React.useState<any[]>([]);
+  type ClientExtractRow = {
+    clientName: string;
+    totalBrokerage: number;
+  };
+
+  const [clientExtractRows, setClientExtractRows] = React.useState<ClientExtractRow[]>([]);
+  const [activeView, setActiveView] = React.useState<"report" | "extract">("report");
+   const clientExtractGrandTotal = React.useMemo(() => {
+    return clientExtractRows.reduce((sum, r) => sum + r.totalBrokerage, 0);
+  }, [clientExtractRows]);
 
   React.useEffect(() => {
     let alive = true;
@@ -196,6 +238,24 @@ export default function DayWiseReport() {
     };
   }, []);
 
+  React.useEffect(() => {
+  function handleKeyDown(e: KeyboardEvent) {
+    const isPrintShortcut = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p";
+    if (!isPrintShortcut) return;
+
+    const hasExtractData = activeView === "extract" && clientExtractRows.length > 0;
+    const hasReportData = activeView !== "extract" && rows.length > 0;
+
+    if (!hasExtractData && !hasReportData) return;
+
+    e.preventDefault();
+    printReport();
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [activeView, clientExtractRows.length, rows.length]);
+
   const selectedCompany = React.useMemo(() => {
     const q = norm(companyName);
     if (!q) return null;
@@ -218,9 +278,9 @@ export default function DayWiseReport() {
   }
 
   async function showReport() {
-    console.log(1)
     if (!validate()) return;
-    console.log(2)
+    setActiveView("report");
+    setClientExtractRows([]);
     setLoading(true);
     setRows([]);
     setError("");
@@ -278,6 +338,30 @@ export default function DayWiseReport() {
     } catch (e) {
       console.error(e);
       setError("Failed to load transactions. Check API / server logs.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function showClientExtract() {
+    if (!validate()) return;
+
+    setLoading(true);
+    setError("");
+    setRows([]);
+    setClientExtractRows([]);
+
+    try {
+      const all = await fetchJson("/api/transactions");
+      const list: TxRow[] = Array.isArray(all) ? all : [];
+
+      const extractRows = buildClientExtractFromTransactions(list, fromDate, toDate);
+
+      setClientExtractRows(extractRows);
+      setActiveView("extract");
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load client extract. Check API / server logs.");
     } finally {
       setLoading(false);
     }
@@ -973,11 +1057,17 @@ const previewCompany = React.useMemo(() => {
             <button style={btnPrimary} onClick={showReport} disabled={loading}>
               {loading ? "Loading..." : "Show Report"}
             </button>
-            <button style={btn} onClick={printReport} disabled={rows.length === 0}>
+           
+            <button
+              style={btn}
+              onClick={printReport}
+              disabled={activeView === "extract" ? clientExtractRows.length === 0 : rows.length === 0}
+            >
               Print
             </button>
-            <button style={btn} onClick={buildPdf} disabled={rows.length === 0}>
-              Download PDF
+
+            <button style={btn} onClick={showClientExtract} disabled={loading}>
+              Client Extract
             </button>
           </div>
 
@@ -1006,10 +1096,61 @@ const previewCompany = React.useMemo(() => {
               </div>
 
       {/* Report preview */}
-      {/* Report preview */}
       <div style={reportWrap}>
         <div style={paper} id="report-preview">
-          {reportMode === "client" ? (
+          {activeView === "extract" ? (
+            <>
+              <div style={boxTitleRow}>
+                <div style={boxedTitle}>CLIENT WISE ABSTRACT</div>
+              </div>
+
+              <div style={subLine}>
+                Report From {toDMonYY(fromDate)} To {toDMonYY(toDate)}
+              </div>
+
+              <div style={tableWrap}>
+                <table style={tbl}>
+                  <colgroup>
+                    <col style={{ width: "70%" }} />
+                    <col style={{ width: "30%" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={thCompact}>Client Name</th>
+                      <th style={{ ...thCompact, textAlign: "right" }}>Brokerage Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientExtractRows.length === 0 ? (
+                      <tr>
+                        <td style={tdCompact} colSpan={2}>No records</td>
+                      </tr>
+                    ) : (
+                      <>
+                        {clientExtractRows.map((r, idx) => (
+                          <tr key={`${r.clientName}-${idx}`}>
+                            <td style={tdCompact}>{r.clientName}</td>
+                            <td style={{ ...tdCompact, textAlign: "right" }}>
+                              {money(r.totalBrokerage)}
+                            </td>
+                          </tr>
+                        ))}
+
+                        <tr>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
+                            Grand Total
+                          </td>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
+                            {money(clientExtractGrandTotal)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : reportMode === "client" ? (
             <>
               <div style={previewTopRow}>
                 <div style={previewLeftBlock}>
@@ -1116,10 +1257,8 @@ const previewCompany = React.useMemo(() => {
                                   <td style={tdCompact}>{safe(r.confirm_date ?? r.confirmDate ?? "-")}</td>
                                   <td style={tdCompact}>{oppositeParty}</td>
                                   <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.rate || "-")}</td>
-                                  {/* <td style={{ ...tdCompact, textAlign: "right" }}>{safe(r.quantity || "-")}</td>
-                                  <td style={tdCompact}>{safe(r.unit_qty ?? r.unitQty ?? "-")}</td> */}
-                                 <td style={{ ...tdCompact, textAlign: "right" }}>{safe((r.delivery_qty ?? r.deliveryQty) || "-")}</td>
-<td style={tdCompact}>{safe(r.delivery_unit_qty ?? r.deliveryUnitQty ?? "-")}</td>
+                                  <td style={{ ...tdCompact, textAlign: "right" }}>{safe((r.delivery_qty ?? r.deliveryQty) || "-")}</td>
+                                  <td style={tdCompact}>{safe(r.delivery_unit_qty ?? r.deliveryUnitQty ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.delivery_date ?? r.deliveryDate ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.tanker_no ?? r.tankerNo ?? "-")}</td>
                                   <td style={tdCompact}>{safe(r.bill_no ?? r.billNo ?? "-")}</td>

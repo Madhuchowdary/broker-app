@@ -146,7 +146,7 @@ db.exec(`
     transaction_id TEXT UNIQUE,
 
     seller TEXT,
-    seller_brokerage TEXT,
+    seller_brokerage TEXT,x
     buyer TEXT,
     buyer_brokerage TEXT,
 
@@ -215,6 +215,28 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS app_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TRIGGER IF NOT EXISTS trg_app_users_updated_at
+  AFTER UPDATE ON app_users
+  BEGIN
+    UPDATE app_users SET updated_at = datetime('now') WHERE id = NEW.id;
+  END;
+`);
+
+db.exec(`
+  INSERT OR IGNORE INTO app_users (user_id, password, is_active)
+  VALUES ('anilshahknl', 'Friendship', 1);
 `);
 
 module.exports = db;

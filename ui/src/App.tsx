@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import MainLayout from "./layout/MainLayout";
+import Login from "./pages/Login";
 
 // Your real page
 import Clients from "./pages/Clients";
@@ -37,62 +38,62 @@ const P = ({ title }: { title: string }) => (
   </div>
 );
 
+function isAuthenticated() {
+  return localStorage.getItem("isAuthenticated") === "true";
+}
+
+function RequireAuth() {
+  return isAuthenticated() ? <Outlet /> : <Navigate to="/login" replace />;
+}
+
+function LoginRoute() {
+  return isAuthenticated() ? <Navigate to="/master/clients" replace /> : <Login />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<MainLayout />}>
-          {/* default */}
-          <Route path="/" element={<Navigate to="/master/clients" />} />
+        <Route path="/login" element={<LoginRoute />} />
 
-          {/* top menu bases */}
-          <Route path="/master" element={<Navigate to="/master/clients" />} />
-          <Route path="/transactions" element={<Navigate to="/transactions/entry" />} />
-          <Route path="/reports" element={<Navigate to="/reports/day-wise" />} />
-          <Route path="/maintenance" element={<Navigate to="/maintenance/backup" replace />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Navigate to="/master/clients" replace />} />
 
-          {/* MASTER tabs */}
-          <Route path="/master/clients" element={<Clients />} />
-          <Route path="/master/items" element={<Items />} />
-          <Route path="/master/qty-types" element={<QtyTypes />} />
+            <Route path="/master" element={<Navigate to="/master/clients" replace />} />
+            <Route path="/transactions" element={<Navigate to="/transactions/entry" replace />} />
+            <Route path="/reports" element={<Navigate to="/reports/day-wise" replace />} />
+            <Route path="/maintenance" element={<Navigate to="/maintenance/backup" replace />} />
 
-          <Route path="/master/rate-per-unit" element={<RatePerUnit />} />
-  
-         <Route path="/master/delivery-places" element={<DeliveryPlaces />} />
+            <Route path="/master/clients" element={<Clients />} />
+            <Route path="/master/items" element={<Items />} />
+            <Route path="/master/qty-types" element={<QtyTypes />} />
+            <Route path="/master/rate-per-unit" element={<RatePerUnit />} />
+            <Route path="/master/delivery-places" element={<DeliveryPlaces />} />
+            <Route path="/master/payment-types" element={<PaymentTypes />} />
+            <Route path="/master/flags" element={<Flags />} />
 
+            <Route path="/transactions" element={<Navigate to="/transactions/entry" />} />
+            <Route path="/transactions/*" element={<TransactionsShell />}>
+              <Route path="entry" element={<TransactionsEntry />} />
+              <Route path="find" element={<TransactionsFind />} />
+              <Route path="report/:id" element={<TransactionsReport />} />
+            </Route>
 
-          <Route path="/master/payment-types" element={<PaymentTypes />} />
-          <Route path="/master/flags" element={<Flags />} />
+            <Route path="/reports/day-wise" element={<DayWiseReport />} />
+            <Route path="/reports/bill" element={<P title="Bill (Main Report)" />} />
 
-          {/* TRANSACTIONS tabs */}
-          <Route path="/transactions" element={<Navigate to="/transactions/entry" />} />
-          <Route path="/transactions/*" element={<TransactionsShell />}>
-            <Route path="entry" element={<TransactionsEntry />} />
-            <Route path="find" element={<TransactionsFind />} />
-            <Route path="report/:id" element={<TransactionsReport />} />
-
+            <Route path="/maintenance/backup" element={<Backup />} />
+            <Route path="/maintenance/change-password" element={<P title="Change Password" />} />
+            <Route path="/maintenance/company-details" element={<CompanyDetails />} />
+            <Route path="/maintenance/sms-email-settings" element={<P title="SMS / e-Mail Settings" />} />
+            <Route path="/maintenance/clear-database" element={<P title="Clear Database" />} />
           </Route>
-
-
-          {/* REPORTS (right-side legacy menu) */}
-          <Route path="/reports/day-wise" element={<DayWiseReport />} />
-          {/* <Route path="/reports/item-wise" element={<P title="Item Wise Report" />} />
-          <Route path="/reports/client-wise-report" element={<P title="Client Wise Report" />} />
-          <Route path="/reports/client-wise-abstract" element={<P title="Client Wise Abstract" />} /> */}
-
-          {/* If you still want Bill later keep it, else remove */}
-          <Route path="/reports/bill" element={<P title="Bill (Main Report)" />} />
-
-          {/* MAINTENANCE tabs */}
-          // MAINTENANCE pages (right menu)
-          <Route path="/maintenance/backup" element={<Backup />} />
-          <Route path="/maintenance/change-password" element={<P title="Change Password" />} />
-          <Route path="/maintenance/company-details" element={<CompanyDetails />} />
-          <Route path="/maintenance/sms-email-settings" element={<P title="SMS / e-Mail Settings" />} />
-          <Route path="/maintenance/clear-database" element={<P title="Clear Database" />} />
-
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+            
     </BrowserRouter>
   );
 }
