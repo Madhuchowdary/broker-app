@@ -842,7 +842,7 @@ const previewCompany = React.useMemo(() => {
 
             th, td {
               border: 1px solid #333;
-              padding: 1px 2px;
+              padding: 2px 6px;
               font-size: 9px;
               line-height: 1.2;
               vertical-align: middle;
@@ -921,6 +921,12 @@ const previewCompany = React.useMemo(() => {
               letter-spacing: 1px !important;
               padding: 10px 16px !important;
             }
+           /* Client extract numeric column should not touch right border */
+            #report-preview th:last-child,
+            #report-preview td:last-child {
+              padding-right: 8px !important;
+              text-align: right !important;
+            }  
           </style>
         </head>
         <body>
@@ -1109,15 +1115,15 @@ const previewCompany = React.useMemo(() => {
               </div>
 
               <div style={tableWrap}>
-                <table style={tbl}>
+                <table style={extractTbl}>
                   <colgroup>
-                    <col style={{ width: "70%" }} />
-                    <col style={{ width: "30%" }} />
+                    <col style={{ width: "78%" }} />
+                    <col style={{ width: "22%" }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th style={thCompact}>Client Name</th>
-                      <th style={{ ...thCompact, textAlign: "right" }}>Brokerage Total</th>
+                      <th style={{ ...thCompact, paddingLeft:10}}>Client Name</th>
+                      <th style={{ ...thCompact, textAlign: "right", paddingRight: 10 }}>Brokerage Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1129,18 +1135,18 @@ const previewCompany = React.useMemo(() => {
                       <>
                         {clientExtractRows.map((r, idx) => (
                           <tr key={`${r.clientName}-${idx}`}>
-                            <td style={tdCompact}>{r.clientName}</td>
-                            <td style={{ ...tdCompact, textAlign: "right" }}>
+                            <td style={{ ...tdCompact, paddingLeft:10}}>{r.clientName}</td>
+                            <td style={{ ...tdCompact, textAlign: "right",  paddingRight: 10 }}>
                               {money(r.totalBrokerage)}
                             </td>
                           </tr>
                         ))}
 
                         <tr>
-                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700, paddingRight:10 }}>
                             Grand Total
                           </td>
-                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700 }}>
+                          <td style={{ ...tdCompact, textAlign: "right", fontWeight: 700, paddingRight:10 }}>
                             {money(clientExtractGrandTotal)}
                           </td>
                         </tr>
@@ -1490,6 +1496,14 @@ const tbl: React.CSSProperties = {
   tableLayout: "fixed",
   fontSize: 11,
 };
+ 
+const extractTbl: React.CSSProperties = {
+  width: "90%",
+  borderCollapse: "collapse",
+  tableLayout: "fixed",
+  fontSize: 11,
+};
+
 
 const th: React.CSSProperties = {
   border: "1px solid #333",

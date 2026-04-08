@@ -43,8 +43,10 @@ ensureTransactionIdColumn();
  *  GET /api/transactions?status=UNDELIVERED&q=abc
  */
 router.get("/", (req, res) => {
-  const status = (req.query.status || "").toString().trim(); // optional
+  const status = (req.query.status || "").toString().trim();
   const q = (req.query.q || "").toString().trim();
+  const fromDate = (req.query.fromDate || "").toString().trim(); // yyyy-mm-dd
+  const toDate = (req.query.toDate || "").toString().trim();     // yyyy-mm-dd
 
   const where = [`is_active = 1`];
   const args = [];
@@ -54,18 +56,6 @@ router.get("/", (req, res) => {
     args.push(status);
   }
 
-  // if (q) {
-  //   where.push(`
-  //     (
-  //       seller LIKE ? OR buyer LIKE ? OR product LIKE ? OR
-  //       delivery_place LIKE ? OR payment LIKE ? OR flag LIKE ? OR
-  //       tanker_no LIKE ? OR bill_no LIKE ? OR
-  //       transaction_id LIKE ?
-  //     )
-  //   `);
-  //   const like = `%${q}%`;
-  //   args.push(like, like, like, like, like, like, like, like, like);
-  // }
   if (q) {
     where.push(`
       (
@@ -76,6 +66,29 @@ router.get("/", (req, res) => {
     `);
     const like = `%${q}%`;
     args.push(like, like, like);
+  }
+
+  // confirm_date is stored as dd-mm-yyyy in DB
+  // convert it to yyyy-mm-dd inside SQL for proper comparison
+  const confirmDateExpr = `
+    CASE
+      WHEN confirm_date IS NOT NULL
+       AND length(confirm_date) = 10
+       AND substr(confirm_date, 3, 1) = '-'
+       AND substr(confirm_date, 6, 1) = '-'
+      THEN substr(confirm_date, 7, 4) || '-' || substr(confirm_date, 4, 2) || '-' || substr(confirm_date, 1, 2)
+      ELSE NULL
+    END
+  `;
+
+  if (fromDate) {
+    where.push(`${confirmDateExpr} >= ?`);
+    args.push(fromDate);
+  }
+
+  if (toDate) {
+    where.push(`${confirmDateExpr} <= ?`);
+    args.push(toDate);
   }
 
   const sql = `

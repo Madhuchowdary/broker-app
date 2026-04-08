@@ -112,6 +112,8 @@ export default function TransactionsEntry() {
   const [gstOpen, setGstOpen] = React.useState(false);
   const [gstValue, setGstValue] = React.useState("");
   const [gstSaving, setGstSaving] = React.useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const fromDateRef = React.useRef<HTMLInputElement | null>(null);
 
     // load once
@@ -169,6 +171,7 @@ export default function TransactionsEntry() {
   const [gridRows, setGridRows] = useState<any[]>([]); // results list
   const [gridLoaded, setGridLoaded] = useState(false); // to keep empty until search
   const [gridLoading, setGridLoading] = useState(false);
+  
 
   //const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -337,31 +340,32 @@ export default function TransactionsEntry() {
     setShowDeliveryPanel(false);
   }
 
-  async function searchGrid(opts?: { status?: "UNDELIVERED" | "DELIVERED" | "" }) {
-    const q = (searchQ || "").trim();
-    const status = (opts?.status ?? "").trim();
+  // async function searchGrid(opts?: { status?: "UNDELIVERED" | "DELIVERED" | "" }) {
+  //   const q = (searchQ || "").trim();
+  //   const status = (opts?.status ?? "").trim();
 
-    if (!q && !status) {
-      setGridRows([]);
-      setGridLoaded(true);
-      return;
-    }
+  //   if (!q && !status) {
+  //     setGridRows([]);
+  //     setGridLoaded(true);
+  //     return;
+  //   }
 
-    setGridLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      if (status) params.set("status", status);
+  //   setGridLoading(true);
+  //   try {
+  //     const params = new URLSearchParams();
+  //     if (q) params.set("q", q);
+  //     if (status) params.set("status", status);
 
-      const res = await fetch(`${TX_API}?${params.toString()}`);
-      const data = await res.json();
-      setGridRows(Array.isArray(data) ? data : []);
-      setGridLoaded(true);
-      //setSelectedIds([]);
-    } finally {
-      setGridLoading(false);
-    }
-  }
+  //     const res = await fetch(`${TX_API}?${params.toString()}`);
+  //     const data = await res.json();
+  //     setGridRows(Array.isArray(data) ? data : []);
+  //     setGridLoaded(true);
+  //     //setSelectedIds([]);
+  //   } finally {
+  //     setGridLoading(false);
+  //   }
+  // }
+
 
   // async function bulkDeleteSelected() {
   //   if (selectedIds.length === 0) return;
@@ -375,6 +379,41 @@ export default function TransactionsEntry() {
   //   setGridRows((prev) => prev.filter((r) => !selectedIds.includes(Number(r.id))));
   //   setSelectedIds([]);
   // }
+  async function searchGrid(opts?: {
+  q?: string;
+  fromDate?: string;
+  toDate?: string;
+  status?: "UNDELIVERED" | "DELIVERED" | "";
+}) {
+  const q = (opts?.q ?? searchQ ?? "").trim();
+  const from = (opts?.fromDate ?? fromDate ?? "").trim();
+  const to = (opts?.toDate ?? toDate ?? "").trim();
+  const status = (opts?.status ?? "").trim();
+
+  if (!q && !from && !to && !status) {
+    setGridRows([]);
+    setGridLoaded(false);
+    return;
+  }
+
+  setGridLoading(true);
+  try {
+    const params = new URLSearchParams();
+
+    if (q) params.set("q", q);
+    if (from) params.set("fromDate", from);
+    if (to) params.set("toDate", to);
+    if (status) params.set("status", status);
+
+    const res = await fetch(`${TX_API}?${params.toString()}`);
+    const data = await res.json();
+
+    setGridRows(Array.isArray(data) ? data : []);
+    setGridLoaded(true);
+  } finally {
+    setGridLoading(false);
+  }
+}
 
   type Opt = { id: number; name: string };
 
@@ -793,18 +832,91 @@ export default function TransactionsEntry() {
               <div style={{ fontWeight: 800, color: "#1f2a3a" }}>Find Transactions</div>
 
               <input
-                style={{ ...searchInput, width: 360 }}
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                placeholder="Search seller / buyer / product / tanker / bill etc..."
-                onKeyDown={(e) => (e.key === "Enter" ? searchGrid() : null)}
-              />
+              style={{ ...searchInput, width: 250 }}
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder="Enter id to start search..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  searchGrid({
+                    q: e.currentTarget.value,
+                    fromDate,
+                    toDate,
+                  });
+                }
+              }}
+            />
 
-              <button style={btnTop} onClick={() => searchGrid()}>
-                Search
-              </button>
+        
+            <label style={{ fontWeight: 800, color: "#1f2a3a", fontSize: 14 }}>From</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type="date"
+                  style={{ ...searchInput, width: 150, paddingRight: 24 }}
+                  value={fromDate || ""}
+                  onChange={(e) => {
+                    const value = e.target.value || "";
+                    setFromDate(value);
+                    searchGrid({ fromDate: value, toDate, q: searchQ });
+                  }}
+                />
+                {fromDate && (
+                  <span
+                    onClick={() => {
+                      setFromDate("");
+                      searchGrid({ fromDate: "", toDate, q: searchQ });
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: 6,
+                      top: 6,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "#888",
+                    }}
+                  >
+                    ✖
+                  </span>
+                )}
+              </div>    
+              <label style={{ fontWeight: 800, color: "#1f2a3a", fontSize: 14 }}>To</label>
+            <div style={{ position: "relative" }}>
+                <input
+                  type="date"
+                  style={{ ...searchInput, width: 150, paddingRight: 24 }}
+                  value={toDate || ""}
+                  onChange={(e) => {
+                    const value = e.target.value || "";
+                    setToDate(value);
+                    searchGrid({ fromDate, toDate: value, q: searchQ });
+                  }}
+                />
 
-              <button style={btnTop} onClick={() => searchGrid({ status: "UNDELIVERED" })}>
+                {toDate && (
+                  <span
+                    onClick={() => {
+                      setToDate("");
+                      searchGrid({ fromDate, toDate: "", q: searchQ });
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: 6,
+                      top: 6,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "#888",
+                    }}
+                  >
+                    ✖
+                  </span>
+                )}
+              </div>
+              <button style={btnTop} onClick={() => searchGrid({
+                    q: searchQ,
+                    fromDate,
+                    toDate,
+                    status: "UNDELIVERED",
+                  })}>
                 Show Undelivered
               </button>
 
